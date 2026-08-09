@@ -1,0 +1,33 @@
+name: Redis Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/redis/v*'
+    paths:
+      - 'providers/redis/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/provider-redis.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/redis/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/provider-redis.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: Redis provider
+      module_directory: providers/redis

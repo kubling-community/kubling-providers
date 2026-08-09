@@ -1,0 +1,119 @@
+name: Go SDK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'sdk-go/v*'
+    paths:
+      - 'proto/**'
+      - 'sdk-go/**'
+      - 'buf.gen.yaml'
+      - 'buf.lock'
+      - 'buf.yaml'
+      - 'generate.sh'
+      - 'tools/bootstrap.sh'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/sdk-go.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'proto/**'
+      - 'sdk-go/**'
+      - 'buf.gen.yaml'
+      - 'buf.lock'
+      - 'buf.yaml'
+      - 'generate.sh'
+      - 'tools/bootstrap.sh'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/sdk-go.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  generated:
+    name: Verify generated sources
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+          cache: true
+          cache-dependency-path: sdk-go/go.sum
+
+      - name: Install generation tools
+        run: bash tools/bootstrap.sh
+
+      - name: Generate Go SDK
+        run: bash generate.sh
+
+      - name: Tidy Go SDK module
+        working-directory: sdk-go
+        run: go mod tidy
+
+      - name: Verify generated sources are up to date
+        run: |
+          if ! git diff --exit-code; then
+            echo "::error::Generated Go sources or module files are not up to date."
+            echo "::error::Run generate.sh and 'go mod tidy' in sdk-go, then commit the changes."
+            exit 1
+          fi
+
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: Go SDK
+      module_directory: sdk-go
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/sdk-go/v')
+    needs:
+      - generated
+      - validate
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Validate release tag and module
+        run: |
+          version="${GITHUB_REF_NAME#sdk-go/}"
+          if [[ ! "${version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::${GITHUB_REF_NAME} is not a valid SDK semantic version tag."
+            exit 1
+          fi
+
+          module="$(sed -n 's/^module //p' sdk-go/go.mod)"
+          if [[ "${module}" != "github.com/kubling-community/kubling-providers/sdk-go" ]]; then
+            echo "::error::Unexpected Go module path: ${module}."
+            exit 1
+          fi
+
+          if grep -Eq '^[[:space:]]*replace[[:space:](]' sdk-go/go.mod; then
+            echo "::error::sdk-go/go.mod must not contain replace directives in a release."
+            exit 1
+          fi
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Go SDK ${GITHUB_REF_NAME#sdk-go/}"

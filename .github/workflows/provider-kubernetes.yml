@@ -1,0 +1,33 @@
+name: Kubernetes Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/kubernetes/v*'
+    paths:
+      - 'providers/kubernetes/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/provider-kubernetes.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/kubernetes/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/provider-kubernetes.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: Kubernetes provider
+      module_directory: providers/kubernetes
