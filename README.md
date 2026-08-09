@@ -41,12 +41,10 @@ consumed directly by Go tooling.
 - Go SDK releases use tags such as `sdk-go/v0.1.0`.
 - Official provider releases use tags such as
   `providers/cassandra/v0.1.0`.
-- Cassandra container images are published as
-  `docker.io/kubling/cassandra-provider`.
 
 Provider-specific configuration and local environments are documented in each
 provider directory.
 
 ## License
 
-Apache License 2.0. See `LICENSE`.
+Apache License 2.0.
