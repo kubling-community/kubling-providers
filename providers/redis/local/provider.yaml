@@ -1,0 +1,11 @@
+namespaces:
+  sample:
+    address: 127.0.0.1:6379
+    database: 0
+    dialTimeout: 5s
+    readTimeout: 5s
+    writeTimeout: 5s
+    poolSize: 10
+    scanCount: 100
+    maxScannedKeys: 10000
+    schemaFile: ../schema.test.yaml

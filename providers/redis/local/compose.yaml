@@ -1,0 +1,22 @@
+name: kubling-redis-local
+
+services:
+  redis:
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  seed:
+    image: ${REDIS_IMAGE:-redis:7.4-alpine}
+    depends_on:
+      redis:
+        condition: service_healthy
+    entrypoint: ["sh", "/seed.sh"]
+    volumes:
+      - ./seed.sh:/seed.sh:ro

@@ -1,0 +1,145 @@
+# This YAML schema and schema.example.sql define equivalent logical Kubling tables.
+# The Redis provider reads this file; the SQL file is the equivalent Kubling DDL example.
+tables:
+  - name: PROJECT
+    structure: hash
+    keyPrefix: "PROJECT:"
+    updatable: false
+    annotation: Projects used to group tasks in the Redis sample domain.
+    key:
+      name: id
+      type: STRING
+      annotation: Stable identifier of the project.
+    fields:
+      - name: name
+        type: STRING
+        nullable: false
+        annotation: Human-readable project name.
+      - name: status
+        type: CHAR
+        nullable: false
+        annotation: Single-character project lifecycle code.
+      - name: active
+        type: BOOLEAN
+        nullable: false
+        annotation: Whether work on the project is active.
+      - name: budget
+        type: BIGDECIMAL
+        annotation: Planned project budget.
+      - name: started_on
+        type: DATE
+        annotation: Calendar date on which the project started.
+      - name: metadata
+        type: JSON
+        annotation: Extensible project metadata.
+
+  - name: TASK
+    structure: hash
+    keyPrefix: "TASK:"
+    updatable: true
+    annotation: Mutable work items stored as Redis hashes.
+    key:
+      name: id
+      type: STRING
+      annotation: Stable identifier of the task.
+    fields:
+      - name: project_id
+        type: STRING
+        nullable: false
+        annotation: Identifier of the owning project.
+      - name: title
+        type: STRING
+        nullable: false
+        annotation: Short description of the work.
+      - name: description
+        type: CLOB
+        annotation: Potentially large task description.
+      - name: completed
+        type: BOOLEAN
+        nullable: false
+        annotation: Whether the task is complete.
+      - name: priority
+        type: INTEGER
+        nullable: false
+        annotation: Relative scheduling priority.
+      - name: estimate_hours
+        type: FLOAT
+        annotation: Estimated effort in hours.
+      - name: due_at
+        type: TIMESTAMP
+        annotation: Local completion deadline.
+
+  - name: AUDIT_EVENT
+    structure: hash
+    keyPrefix: "AUDIT_EVENT:"
+    updatable: false
+    annotation: Read-only audit events in the Redis sample domain.
+    key:
+      name: id
+      type: LONG
+      annotation: Monotonically increasing event identifier.
+    fields:
+      - name: entity_type
+        type: STRING
+        nullable: false
+        annotation: Logical object type that produced the event.
+      - name: entity_id
+        type: STRING
+        nullable: false
+        annotation: Identifier of the affected object.
+      - name: action
+        type: CHAR
+        nullable: false
+        annotation: Single-character action code.
+      - name: sequence
+        type: SHORT
+        nullable: false
+        annotation: Source-local sequence number.
+      - name: risk_score
+        type: DOUBLE
+        annotation: Computed event risk score.
+      - name: occurred_at
+        type: TIMESTAMP
+        nullable: false
+        annotation: Timestamp at which the event occurred.
+      - name: source_address
+        type: VARBINARY
+        annotation: Binary source network address.
+      - name: payload
+        type: JSON
+        annotation: Structured event payload.
+      - name: raw_payload
+        type: BLOB
+        annotation: Original binary event payload.
+
+  - name: TYPE_SAMPLE
+    structure: hash
+    keyPrefix: "TYPE_SAMPLE:"
+    updatable: false
+    annotation: Canonical row covering every concrete Kubling value type.
+    key:
+      name: sample_id
+      type: STRING
+      annotation: Identifier of the canonical sample row.
+    fields:
+      - {name: string_value, type: STRING, nullable: false, annotation: Variable-length character string.}
+      - {name: varbinary_value, type: VARBINARY, nullable: false, annotation: Variable-length binary value.}
+      - {name: char_value, type: CHAR, nullable: false, annotation: Single character.}
+      - {name: boolean_value, type: BOOLEAN, nullable: false, annotation: Boolean value.}
+      - {name: byte_value, type: BYTE, nullable: false, annotation: Signed 8-bit integer.}
+      - {name: short_value, type: SHORT, nullable: false, annotation: Signed 16-bit integer.}
+      - {name: integer_value, type: INTEGER, nullable: false, annotation: Signed 32-bit integer.}
+      - {name: long_value, type: LONG, nullable: false, annotation: Signed 64-bit integer.}
+      - {name: biginteger_value, type: BIGINTEGER, nullable: false, annotation: Arbitrary precision integer.}
+      - {name: float_value, type: FLOAT, nullable: false, annotation: 32-bit floating-point value.}
+      - {name: double_value, type: DOUBLE, nullable: false, annotation: 64-bit floating-point value.}
+      - {name: bigdecimal_value, type: BIGDECIMAL, nullable: false, annotation: Arbitrary precision decimal.}
+      - {name: date_value, type: DATE, nullable: false, annotation: Calendar date.}
+      - {name: time_value, type: TIME, nullable: false, annotation: Local time.}
+      - {name: timestamp_value, type: TIMESTAMP, nullable: false, annotation: Local timestamp.}
+      - {name: blob_value, type: BLOB, nullable: false, annotation: Binary large object.}
+      - {name: clob_value, type: CLOB, nullable: false, annotation: Character large object.}
+      - {name: geometry_value, type: GEOMETRY, nullable: false, annotation: Geometry bytes.}
+      - {name: geography_value, type: GEOGRAPHY, nullable: false, annotation: Geography bytes.}
+      - {name: json_value, type: JSON, nullable: false, annotation: JSON document.}
+      - {name: xml_value, type: XML, nullable: false, annotation: XML compatibility value.}
