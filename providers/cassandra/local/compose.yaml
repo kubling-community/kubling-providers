@@ -1,0 +1,41 @@
+name: kubling-cassandra-local
+
+services:
+  cassandra:
+    image: ${CASSANDRA_IMAGE:-cassandra:5.0}
+    environment:
+      CASSANDRA_CLUSTER_NAME: Kubling Local
+      CASSANDRA_DC: datacenter1
+      CASSANDRA_ENDPOINT_SNITCH: GossipingPropertyFileSnitch
+      MAX_HEAP_SIZE: 512M
+      HEAP_NEWSIZE: 100M
+    ports:
+      - "9042:9042"
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - cqlsh 127.0.0.1 9042 -e "SELECT release_version FROM system.local"
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 30s
+    volumes:
+      - cassandra-data:/var/lib/cassandra
+
+  schema-init:
+    image: ${CASSANDRA_IMAGE:-cassandra:5.0}
+    depends_on:
+      cassandra:
+        condition: service_healthy
+    entrypoint:
+      - cqlsh
+    command:
+      - cassandra
+      - "9042"
+      - -f
+      - /schema.cql
+    volumes:
+      - ./schema.cql:/schema.cql:ro
+
+volumes:
+  cassandra-data:

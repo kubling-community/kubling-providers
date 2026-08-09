@@ -1,0 +1,7 @@
+**
+!sdk-go/
+!sdk-go/**
+!providers/
+!providers/cassandra/
+!providers/cassandra/**
+!LICENSE

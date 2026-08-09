@@ -1,0 +1,11 @@
+namespaces:
+  sample:
+    hosts:
+      - 127.0.0.1
+    port: 9042
+    localDataCenter: datacenter1
+    keyspace: kubling_sample
+    consistency: LOCAL_ONE
+    connectTimeout: 11s
+    queryTimeout: 11s
+    connectionsPerHost: 1

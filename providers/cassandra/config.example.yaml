@@ -1,0 +1,24 @@
+namespaces:
+  inventory:
+    hosts:
+      - cassandra-1.internal
+      - cassandra-2.internal
+    port: 9042
+    localDataCenter: dc-west
+    keyspace: inventory
+    consistency: LOCAL_QUORUM
+    connectTimeout: 11s
+    queryTimeout: 11s
+    connectionsPerHost: 2
+
+  secure-events:
+    hosts:
+      - cassandra.internal
+    keyspace: events
+    username: kubling
+    password: replace-with-a-mounted-secret
+    tls:
+      caFile: /run/secrets/cassandra-ca.pem
+      certificateFile: /run/secrets/cassandra-client.pem
+      privateKeyFile: /run/secrets/cassandra-client-key.pem
+      serverName: cassandra.internal
