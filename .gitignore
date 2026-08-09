@@ -1,0 +1,33 @@
+# Downloaded development tools
+/tools/bin/
+
+# Go build and test artifacts
+/bin/
+*.test
+*.out
+*.prof
+*.pprof
+*.trace
+coverage/
+coverage.*
+
+# Local runtime configuration and secrets
+.env
+.env.*
+!.env.example
+*.local.yaml
+*.local.yml
+secrets/
+
+# Editor and operating-system files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.log

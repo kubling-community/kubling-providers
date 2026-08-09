@@ -1,0 +1,255 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/v1/value.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "MetadataProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Provider-neutral relational metadata exposed to Kubling.
+//
+// This structure intentionally models logical relational concepts rather than
+// Kubling core classes or native data source metadata. Provider-specific information
+// may be preserved through properties without coupling the engine to the
+// provider implementation.
+message SchemaMetadata {
+  repeated TableMetadata tables = 1;
+
+  // Provider-defined schema properties.
+  //
+  // Property values must not contain credentials or other secrets.
+  map<string, string> properties = 2;
+
+  // Logical namespaces exposed by the provider.
+  //
+  // Namespace names are provider-defined opaque logical groupings. They may
+  // represent concepts such as a catalog, schema, keyspace, bucket, resource
+  // path or API domain without exposing physical topology to Kubling.
+  repeated NamespaceMetadata namespaces = 3;
+}
+
+// Logical namespace exposed by a provider.
+message NamespaceMetadata {
+  // Opaque logical name that uniquely identifies the namespace.
+  //
+  // Kubling returns this value unchanged when referencing contained entities.
+  string name = 1;
+
+  string annotation = 2;
+
+  // Provider-defined namespace properties.
+  //
+  // Property values must not contain credentials or other secrets.
+  map<string, string> properties = 3;
+}
+
+// Logical table or view exposed by a provider.
+message TableMetadata {
+  // Logical name visible to Kubling queries.
+  string name = 1;
+
+  // Native source name when it differs from the logical name.
+  string source_name = 2;
+
+  TableKind kind = 3;
+  repeated ColumnMetadata columns = 4;
+  repeated KeyMetadata keys = 5;
+
+  // Whether Kubling may plan mutations against this table.
+  optional bool updatable = 6;
+
+  string annotation = 7;
+
+  // Provider-defined table properties.
+  //
+  // Properties may preserve source semantics not represented by the common
+  // model. Values must not contain credentials or other secrets.
+  map<string, string> properties = 8;
+
+  // Logical namespace containing this table.
+  //
+  // An empty value places the table at the provider root.
+  string namespace = 9;
+
+  // Defines this table as a relational projection over a JSON column from
+  // another table in the same SchemaMetadata.
+  //
+  // Providers may leave this unset. Kubling may add synthetic tables while
+  // composing the final logical schema without involving provider execution.
+  SyntheticTableMetadata synthetic = 10;
+}
+
+// Logical column exposed by a table.
+message ColumnMetadata {
+  // Logical name visible to Kubling queries.
+  string name = 1;
+
+  // Native source name when it differs from the logical name.
+  string source_name = 2;
+
+  // Canonical Kubling type used for transport and planning.
+  kubling.v1.ValueType type = 3;
+
+  // Native source type retained for diagnostics and provider-specific logic.
+  string native_type = 4;
+
+  optional bool nullable = 5;
+  optional bool updatable = 6;
+  optional bool auto_incremented = 7;
+
+  // Optional type dimensions. Zero is a valid explicit value when present.
+  optional int32 length = 8;
+  optional int32 precision = 9;
+  optional int32 scale = 10;
+
+  // Optional Kubling expression used as the column default.
+  string default_expression = 11;
+
+  ColumnSearchability searchability = 12;
+  string annotation = 13;
+
+  // Provider-defined column properties.
+  //
+  // Property values must not contain credentials or other secrets.
+  map<string, string> properties = 14;
+}
+
+// Derivation of a synthetic table from a JSON column in a parent table.
+//
+// The relational table itself is the containing TableMetadata, so physical and
+// synthetic tables share the same namespace, keys, columns and update policy.
+// Parent tables may themselves be synthetic.
+message SyntheticTableMetadata {
+  // Parent table in the same SchemaMetadata.
+  TableReference parent = 1;
+
+  // JSON column in the parent table from which rows are expanded.
+  string source_column = 2;
+
+  // JSON path evaluated relative to source_column.
+  string path = 3;
+
+  // Shape produced by evaluating path.
+  SyntheticCardinality cardinality = 4;
+
+  // Origin of every derived or inherited relational column.
+  repeated SyntheticColumnBinding column_bindings = 5;
+
+  // Mutation behavior implemented by Kubling for this derived table.
+  SyntheticMutationMetadata mutations = 6;
+}
+
+// Logical table identity inside the same schema metadata.
+message TableReference {
+  string namespace = 1;
+  string name = 2;
+}
+
+// Maps one synthetic-table column to its document or parent origin.
+message SyntheticColumnBinding {
+  // Column name declared in the containing TableMetadata.
+  string column = 1;
+
+  oneof source {
+    // Value extracted from each expanded JSON element.
+    DocumentColumnBinding document = 2;
+
+    // Value inherited from an ancestor relational row.
+    ParentColumnBinding parent = 3;
+
+    // One-based position of the expanded JSON element.
+    OrdinalityColumnBinding ordinality = 4;
+  }
+}
+
+// Extracts a value relative to the current expanded JSON element.
+message DocumentColumnBinding {
+  string path = 1;
+}
+
+// Inherits a column from the immediate parent or root physical row.
+message ParentColumnBinding {
+  string column = 1;
+  ParentColumnScope scope = 2;
+
+  // True when this value identifies the parent array element while mutating a
+  // nested synthetic table.
+  bool identifies_parent_element = 3;
+}
+
+// Marks a relational column as the ordinal position of an expanded element.
+message OrdinalityColumnBinding {}
+
+// Kubling-owned mutation contract for a synthetic table.
+//
+// Kubling may locate the parent row, modify the nested document and submit the
+// resulting parent mutation through the normal provider mutation API.
+message SyntheticMutationMetadata {
+  SyntheticMutationStrategy strategy = 1;
+
+  // Presence distinguishes an explicit policy from a Core default.
+  optional bool insertable = 2;
+  optional bool updatable = 3;
+  optional bool deletable = 4;
+  optional bool allow_bulk_insert = 5;
+}
+
+// Ordered relational key definition.
+message KeyMetadata {
+  string name = 1;
+  KeyKind kind = 2;
+
+  // Logical column names in key order.
+  repeated string columns = 3;
+
+  // Logical referenced table and columns for foreign keys.
+  string referenced_table = 4;
+  repeated string referenced_columns = 5;
+
+  map<string, string> properties = 6;
+}
+
+enum TableKind {
+  TABLE_KIND_UNSPECIFIED = 0;
+  TABLE_KIND_TABLE = 1;
+  TABLE_KIND_VIEW = 2;
+}
+
+enum KeyKind {
+  KEY_KIND_UNSPECIFIED = 0;
+  KEY_KIND_PRIMARY = 1;
+  KEY_KIND_UNIQUE = 2;
+  KEY_KIND_INDEX = 3;
+  KEY_KIND_FOREIGN = 4;
+}
+
+enum ColumnSearchability {
+  COLUMN_SEARCHABILITY_UNSPECIFIED = 0;
+  COLUMN_SEARCHABILITY_UNSEARCHABLE = 1;
+  COLUMN_SEARCHABILITY_EQUALITY = 2;
+  COLUMN_SEARCHABILITY_ORDERED = 3;
+  COLUMN_SEARCHABILITY_ALL = 4;
+}
+
+enum SyntheticCardinality {
+  SYNTHETIC_CARDINALITY_UNSPECIFIED = 0;
+  SYNTHETIC_CARDINALITY_OBJECT = 1;
+  SYNTHETIC_CARDINALITY_ARRAY = 2;
+}
+
+enum ParentColumnScope {
+  PARENT_COLUMN_SCOPE_UNSPECIFIED = 0;
+  PARENT_COLUMN_SCOPE_IMMEDIATE = 1;
+  PARENT_COLUMN_SCOPE_ROOT = 2;
+}
+
+enum SyntheticMutationStrategy {
+  SYNTHETIC_MUTATION_STRATEGY_UNSPECIFIED = 0;
+
+  // Kubling performs its read-modify-write flow against the physical parent
+  // document for inserts, updates and deletes.
+  SYNTHETIC_MUTATION_STRATEGY_PARENT_DOCUMENT_REWRITE = 1;
+}

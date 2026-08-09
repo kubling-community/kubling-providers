@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/provider/v1/capabilities.proto";
+import "kubling/provider/v1/connection.proto";
+import "kubling/provider/v1/mutation.proto";
+import "kubling/provider/v1/query.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "ProviderProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Provider implementation used by Kubling to access an external data source.
+service ProviderService {
+  // Returns the global capabilities exposed by this provider server.
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+
+  // Returns the Kubling schema exposed for a configured data source.
+  //
+  // The provider may return structured metadata or Kubling DDL. Kubling may
+  // use this schema when no DDL is defined in the data source configuration.
+  rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse);
+
+  // Opens a logical connection to a data source.
+  rpc OpenConnection(OpenConnectionRequest) returns (OpenConnectionResponse);
+
+  // Closes a logical connection and releases its associated resources.
+  rpc CloseConnection(CloseConnectionRequest) returns (CloseConnectionResponse);
+
+  // Returns the health state of the provider server.
+  rpc Health(HealthRequest) returns (HealthResponse);
+
+  // Begins a native local transaction on a logical connection.
+  rpc BeginTransaction(BeginTransactionRequest) returns (BeginTransactionResponse);
+
+  // Commits the active native transaction.
+  rpc CommitTransaction(CommitTransactionRequest) returns (CommitTransactionResponse);
+
+  // Rolls back the active native transaction.
+  rpc RollbackTransaction(RollbackTransactionRequest) returns (RollbackTransactionResponse);
+
+  // Reports whether the logical connection has an active native transaction.
+  rpc IsInTransaction(IsInTransactionRequest) returns (IsInTransactionResponse);
+
+  // Executes a query and streams its result in batches.
+  rpc Query(QueryRequest) returns (stream QueryResponse);
+
+  // Inserts one or more tuples.
+  rpc Insert(InsertRequest) returns (InsertResponse);
+
+  // Updates tuples selected by the request.
+  rpc Update(UpdateRequest) returns (UpdateResponse);
+
+  // Deletes tuples selected by the request.
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+}

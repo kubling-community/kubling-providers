@@ -1,0 +1,40 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/v1/value.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "TupleProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Describes a field returned by the provider.
+message Field {
+  // Field name exposed to Kubling.
+  string name = 1;
+
+  // Logical Kubling type of the field.
+  //
+  // This metadata also determines the logical type of null values.
+  kubling.v1.ValueType type = 2;
+}
+
+// Ordered tuple of values.
+//
+// The position of each value corresponds to the field at the same position
+// in TupleBatch.fields.
+message Tuple {
+  repeated kubling.v1.Value values = 1;
+}
+
+// Batch of tuples returned by the provider.
+message TupleBatch {
+  // Ordered field metadata shared by every tuple in this batch.
+  repeated Field fields = 1;
+
+  // Tuples contained in the batch.
+  //
+  // Every tuple must contain exactly one value for each declared field.
+  repeated Tuple tuples = 2;
+}

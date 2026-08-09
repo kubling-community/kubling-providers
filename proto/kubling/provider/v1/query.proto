@@ -1,0 +1,105 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/provider/v1/expression.proto";
+import "kubling/provider/v1/tuple.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "QueryProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Query executed against a logical provider connection.
+message QueryRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+
+  // Logical entity to query.
+  //
+  // The provider is responsible for mapping this name to its native
+  // representation in the data source.
+  EntityReference entity = 2;
+
+  // Ordered expressions to return.
+  //
+  // The order determines the order of fields and values in the resulting
+  // TupleBatch.
+  repeated Projection projections = 3;
+
+  // Optional filter expression.
+  //
+  // Kubling must only include expressions supported by the provider.
+  Expression filter = 4;
+
+  // Ordered sorting rules.
+  repeated OrderBy order_by = 5;
+
+  // Maximum number of tuples to return.
+  //
+  // When absent, no limit is requested.
+  optional uint64 limit = 6;
+
+  // Number of tuples to skip before returning results.
+  //
+  // When absent, no offset is requested.
+  optional uint64 offset = 7;
+
+  // Preferred maximum number of tuples per streamed batch.
+  //
+  // This is a hint. When absent, the provider chooses an appropriate
+  // batch size.
+  optional uint32 batch_size = 8;
+}
+
+// Logical entity exposed through the Kubling model.
+message EntityReference {
+  // Logical entity name known by Kubling.
+  string name = 1;
+
+  // Opaque logical provider namespace containing the entity.
+  //
+  // Kubling sends the value advertised by the provider unchanged.
+  string namespace = 2;
+}
+
+// Expression returned as part of the query result.
+message Projection {
+  // Expression to evaluate and return.
+  Expression expression = 1;
+
+  // Logical name expected in the corresponding TupleBatch field.
+  string output_name = 2;
+}
+
+// Ordering rule applied by the provider.
+message OrderBy {
+  // Expression used to order the result.
+  Expression expression = 1;
+
+  // Sort direction.
+  SortDirection direction = 2;
+
+  // Required ordering of null values.
+  NullOrdering null_ordering = 3;
+}
+
+// Direction used for ordering query results.
+enum SortDirection {
+  SORT_DIRECTION_UNSPECIFIED = 0;
+  SORT_DIRECTION_ASCENDING = 1;
+  SORT_DIRECTION_DESCENDING = 2;
+}
+
+// Position of null values in an ordered result.
+enum NullOrdering {
+  NULL_ORDERING_UNSPECIFIED = 0;
+  NULL_ORDERING_FIRST = 1;
+  NULL_ORDERING_LAST = 2;
+}
+
+// Streamed query result.
+message QueryResponse {
+  // Batch of tuples produced by the provider.
+  TupleBatch batch = 1;
+}

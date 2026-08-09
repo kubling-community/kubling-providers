@@ -1,0 +1,126 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/v1/value.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "ExpressionProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Expression that may be evaluated by a provider.
+//
+// Kubling must only send expressions declared as supported through the
+// provider capabilities.
+message Expression {
+  oneof kind {
+    FieldReference field = 1;
+    Literal literal = 2;
+    ComparisonExpression comparison = 3;
+    LogicalExpression logical = 4;
+    NullPredicate null_predicate = 5;
+    FunctionCall function_call = 6;
+    PatternExpression pattern = 7;
+  }
+}
+
+// Reference to a logical field in the queried entity.
+message FieldReference {
+  // Logical field name exposed by the Kubling model.
+  //
+  // The provider is responsible for mapping this name to its native
+  // representation in the data source.
+  string name = 1;
+}
+
+// Literal value used in an expression.
+message Literal {
+  kubling.v1.Value value = 1;
+}
+
+// Comparison between two expressions.
+message ComparisonExpression {
+  ComparisonOperator operator = 1;
+  Expression left = 2;
+  Expression right = 3;
+}
+
+// Operators supported by comparison expressions.
+enum ComparisonOperator {
+  COMPARISON_OPERATOR_UNSPECIFIED = 0;
+  COMPARISON_OPERATOR_EQUAL = 1;
+  COMPARISON_OPERATOR_NOT_EQUAL = 2;
+  COMPARISON_OPERATOR_LESS_THAN = 3;
+  COMPARISON_OPERATOR_LESS_THAN_OR_EQUAL = 4;
+  COMPARISON_OPERATOR_GREATER_THAN = 5;
+  COMPARISON_OPERATOR_GREATER_THAN_OR_EQUAL = 6;
+}
+
+// Logical composition of boolean expressions.
+message LogicalExpression {
+  LogicalOperator operator = 1;
+
+  // Expressions combined by the logical operator.
+  //
+  // AND and OR require at least two operands.
+  // NOT requires exactly one operand.
+  repeated Expression operands = 2;
+}
+
+// Operators supported by logical expressions.
+enum LogicalOperator {
+  LOGICAL_OPERATOR_UNSPECIFIED = 0;
+  LOGICAL_OPERATOR_AND = 1;
+  LOGICAL_OPERATOR_OR = 2;
+  LOGICAL_OPERATOR_NOT = 3;
+}
+
+// Tests whether an expression is null or not null.
+message NullPredicate {
+  NullPredicateOperator operator = 1;
+  Expression expression = 2;
+}
+
+// Operators supported by null predicates.
+enum NullPredicateOperator {
+  NULL_PREDICATE_OPERATOR_UNSPECIFIED = 0;
+  NULL_PREDICATE_OPERATOR_IS_NULL = 1;
+  NULL_PREDICATE_OPERATOR_IS_NOT_NULL = 2;
+}
+
+// Pattern comparison between a value and a pattern.
+message PatternExpression {
+  PatternOperator operator = 1;
+
+  // Value to test, normally a field reference.
+  Expression value = 2;
+
+  // Pattern to apply, normally a string literal.
+  Expression pattern = 3;
+
+  // Optional single-character escape used inside the pattern.
+  optional string escape = 4;
+}
+
+// Operators supported by pattern expressions.
+enum PatternOperator {
+  PATTERN_OPERATOR_UNSPECIFIED = 0;
+  PATTERN_OPERATOR_LIKE = 1;
+  PATTERN_OPERATOR_NOT_LIKE = 2;
+}
+
+// Invocation of a logical Kubling function.
+//
+// A provider may translate the logical function name to an equivalent native
+// operation. Kubling must only push down functions explicitly declared by the
+// provider.
+message FunctionCall {
+  // Logical function name known by Kubling.
+  //
+  // Native data source function names must not be exposed through this field.
+  string name = 1;
+
+  // Ordered arguments supplied to the function.
+  repeated Expression arguments = 2;
+}

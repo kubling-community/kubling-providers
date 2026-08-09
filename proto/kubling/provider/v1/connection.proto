@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "ConnectionProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Opens a logical connection to the complete data universe managed by the
+// provider.
+message OpenConnectionRequest {}
+
+// Result of opening a logical provider connection.
+message OpenConnectionResponse {
+  // Opaque identifier assigned to the logical connection.
+  //
+  // The identifier must be included in all subsequent operations performed
+  // through this connection.
+  string connection_id = 1;
+}
+
+// Closes an existing logical provider connection.
+message CloseConnectionRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+}
+
+// Result of closing a logical provider connection.
+message CloseConnectionResponse {}
+
+message BeginTransactionRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+}
+
+// Result of starting a native transaction.
+message BeginTransactionResponse {}
+
+// Commits the active native transaction.
+message CommitTransactionRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+}
+
+// Result of committing the active native transaction.
+message CommitTransactionResponse {}
+
+// Rolls back the active native transaction.
+message RollbackTransactionRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+}
+
+// Result of rolling back the active native transaction.
+message RollbackTransactionResponse {}
+
+// Checks whether a logical connection currently has an active native transaction.
+message IsInTransactionRequest {
+  // Opaque identifier returned by OpenConnection.
+  string connection_id = 1;
+}
+
+// Current transactional state of the logical connection.
+message IsInTransactionResponse {
+  // True when the connection has an active native transaction.
+  bool active = 1;
+}
+
+// Requests the connection-agnostic health state of the provider server.
+message HealthRequest {}
+
+// Health state of the provider server.
+message HealthResponse {
+  // True when the provider server is ready to serve requests.
+  //
+  // Kubling may include this result when computing the engine's aggregate
+  // health, depending on the data source configuration.
+  bool healthy = 1;
+
+  // Optional provider-defined diagnostic information.
+  //
+  // This field must not contain credentials or other sensitive information.
+  string message = 2;
+}

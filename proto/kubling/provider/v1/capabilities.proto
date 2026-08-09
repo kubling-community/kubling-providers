@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+import "kubling/provider/v1/expression.proto";
+import "kubling/provider/v1/metadata.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "CapabilitiesProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Requests the capabilities exposed by this provider server.
+//
+// Capabilities are global to the provider server and do not depend on a logical
+// connection.
+message GetCapabilitiesRequest {}
+
+// Requests the complete Kubling schema exposed by this provider server.
+message GetSchemaRequest {}
+
+// Capabilities exposed by the provider server.
+message GetCapabilitiesResponse {
+  TransactionCapabilities transactions = 1;
+  QueryCapabilities query = 2;
+  MutationCapabilities mutations = 3;
+}
+
+// Schema definition exposed by the provider server.
+message GetSchemaResponse {
+  // Kubling DDL defining the logical schema exposed by the provider.
+  //
+  // This may include foreign tables and other schema objects required to access
+  // the data source through this provider.
+  string schema_ddl = 1;
+
+  // Provider-neutral structured relational metadata.
+  //
+  // Providers should set either metadata or schema_ddl, but not both. Static
+  // providers may prefer DDL while providers that discover source metadata at
+  // runtime should prefer this structured representation.
+  SchemaMetadata metadata = 2;
+}
+
+// Native transaction capabilities.
+message TransactionCapabilities {
+  // True when the provider supports native local transactions.
+  //
+  // When false, Kubling may provide transactional behavior through its
+  // internal soft transaction mechanism.
+  bool supported = 1;
+}
+
+// Query capabilities that affect planning or exact result semantics.
+message QueryCapabilities {
+  // True when the provider requires every query to include a filter criterion.
+  //
+  // This is a structural source restriction used by the Kubling planner.
+  bool requires_criteria = 1;
+
+  // Ordering capabilities.
+  OrderingCapabilities ordering = 2;
+
+  // Pagination capabilities.
+  PaginationCapabilities pagination = 3;
+
+  // Logical Kubling functions that the provider can evaluate exactly.
+  //
+  // Native data source function names must not be exposed here. The provider
+  // is responsible for translating each logical function to its native
+  // equivalent.
+  repeated string supported_functions = 4;
+
+  // Expression operators that the provider can evaluate exactly.
+  ExpressionCapabilities expressions = 5;
+}
+
+// Expression operators supported by a provider.
+//
+// Context-dependent source restrictions may still require the provider to
+// reject a specific expression for a particular entity.
+message ExpressionCapabilities {
+  // Comparison operators that can be evaluated exactly.
+  repeated ComparisonOperator comparison_operators = 1;
+
+  // Logical operators that can be evaluated exactly.
+  repeated LogicalOperator logical_operators = 2;
+
+  // Null predicates that can be evaluated exactly.
+  repeated NullPredicateOperator null_predicate_operators = 3;
+
+  // Pattern operators that can be evaluated exactly.
+  repeated PatternOperator pattern_operators = 4;
+}
+
+// Ordering capabilities.
+message OrderingCapabilities {
+  // True when the provider can apply the requested ordering exactly.
+  bool supported = 1;
+
+  // True when the provider can explicitly control whether null values appear
+  // first or last.
+  bool explicit_null_ordering = 2;
+
+  // Natural null ordering used when explicit null ordering is unavailable.
+  DefaultNullOrder default_null_order = 3;
+}
+
+// Natural ordering of null values used by the provider.
+enum DefaultNullOrder {
+  DEFAULT_NULL_ORDER_UNSPECIFIED = 0;
+
+  // Null is considered greater than every non-null value.
+  DEFAULT_NULL_ORDER_HIGH = 1;
+
+  // Null is considered less than every non-null value.
+  DEFAULT_NULL_ORDER_LOW = 2;
+
+  // Null values always appear first, regardless of sort direction.
+  DEFAULT_NULL_ORDER_FIRST = 3;
+
+  // Null values always appear last, regardless of sort direction.
+  DEFAULT_NULL_ORDER_LAST = 4;
+
+  // The provider's natural null ordering is unknown or not stable.
+  DEFAULT_NULL_ORDER_UNKNOWN = 5;
+}
+
+// Pagination capabilities.
+message PaginationCapabilities {
+  // True when the provider can enforce the requested row limit exactly.
+  bool limit = 1;
+
+  // True when the provider can enforce the requested row offset exactly.
+  bool offset = 2;
+}
+
+// Mutation operations supported by the provider.
+message MutationCapabilities {
+  // True when the provider supports insert operations.
+  bool insert = 1;
+
+  // True when the provider supports update operations.
+  bool update = 2;
+
+  // True when the provider supports delete operations.
+  bool delete = 3;
+
+  // True when insert operations can return generated values.
+  bool generated_values = 4;
+}
