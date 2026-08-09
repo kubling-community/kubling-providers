@@ -1,0 +1,36 @@
+name: kubling-kubernetes-local
+
+services:
+  k3s:
+    image: ${K3S_IMAGE:-rancher/k3s:v1.36.1-k3s1}
+    privileged: true
+
+    command:
+      - server
+      - --disable=traefik
+      - --tls-san=127.0.0.1
+
+    tmpfs:
+      - /run
+      - /var/run
+
+    ports:
+      - "${K3S_API_PORT:-6443}:6443"
+
+    healthcheck:
+      test:
+        - CMD
+        - kubectl
+        - get
+        - --raw=/readyz
+      interval: 5s
+      timeout: 10s
+      retries: 60
+      start_period: 30s
+
+    volumes:
+      - k3s-data:/var/lib/rancher/k3s
+      - ./fixture.yaml:/fixtures/fixture.yaml:ro
+
+volumes:
+  k3s-data:

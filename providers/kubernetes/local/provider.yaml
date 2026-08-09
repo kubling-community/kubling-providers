@@ -1,0 +1,8 @@
+kubeconfig: local/kubeconfig.local.yaml
+requestTimeout: 30s
+qps: 50
+burst: 100
+blankNamespaceStrategy: ALL
+
+schema:
+  fieldExpansionDepth: 4

@@ -1,0 +1,71 @@
+# One provider process connects to exactly one Kubernetes cluster.
+#
+# Omit kubeconfig to use KUBECONFIG or the standard client-go default path.
+# kubeconfig: /home/user/.kube/config
+# context: production
+#
+# Use inCluster when the provider itself runs inside Kubernetes.
+# inCluster: true
+
+requestTimeout: 30s
+qps: 50
+burst: 100
+
+# Controls what happens when a namespaced operation does not explicitly
+# specify metadata__namespace.
+#
+# DEFAULT:
+#   Use the namespace selected by kubeconfig/current context.
+#
+# ALL:
+#   Queries without a namespace search all namespaces.
+#   Mutations still require an explicit namespace.
+#
+# FAIL:
+#   Require an explicit namespace.
+blankNamespaceStrategy: DEFAULT
+
+schema:
+  # Controls automatic expansion of structured Kubernetes fields.
+  #
+  # 0 preserves the compact model and exposes the canonical document columns
+  # such as metadata, spec, status and object without expanding their nested
+  # fields into additional relational columns.
+  #
+  # Higher values allow the provider to expose nested scalar fields and
+  # structured leaves as relational columns up to the configured depth.
+  fieldExpansionDepth: 3
+
+  # Optional.
+  #
+  # If include is omitted or empty, every discoverable/listable Kubernetes
+  # resource is exposed.
+  #
+  # Patterns use Kubernetes groupVersion/resource notation.
+  include:
+    - "v1/*"
+    - "apps/v1/*"
+    - "batch/v1/*"
+
+  # Optional.
+  #
+  # Exclusions are evaluated after includes and always win.
+  exclude:
+    - "v1/events"
+
+  # Optional exact resource-specific overrides.
+  #
+  # Keys use Kubernetes groupVersion/resource notation, not Kind or the
+  # generated Kubling table name.
+  #
+  # Resource keys are exact; glob patterns are intentionally not supported
+  # here so override precedence remains predictable.
+  resources:
+    "apps/v1/deployments":
+      fieldExpansionDepth: 5
+
+    "v1/pods":
+      fieldExpansionDepth: 4
+
+    "batch/v1/jobs":
+      fieldExpansionDepth: 2
