@@ -1,6 +1,12 @@
 name: Protobuf
 
 on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: BSR release label in vMAJOR.MINOR.PATCH format
+        required: true
+        type: string
   push:
     branches:
       - main
@@ -25,6 +31,7 @@ permissions:
 jobs:
   buf:
     name: Validate and publish
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -35,3 +42,67 @@ jobs:
         uses: bufbuild/buf-action@v1
         with:
           token: ${{ secrets.BUF_TOKEN }}
+
+  release:
+    name: Publish versioned release
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate release request
+        id: release
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "::error::Protocol releases must run from the main branch."
+            exit 1
+          fi
+
+          if [[ ! "${RELEASE_VERSION}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::${RELEASE_VERSION} is not a valid protocol semantic version."
+            exit 1
+          fi
+
+          tag="proto/${RELEASE_VERSION}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${tag}" >/dev/null 2>&1; then
+            echo "::error::Protocol release tag ${tag} already exists."
+            exit 1
+          fi
+
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up Buf
+        uses: bufbuild/buf-action@v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+
+      - name: Validate and publish protocol release
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          buf build --error-format github-actions
+          buf lint --error-format github-actions
+          buf push \
+            --label "${RELEASE_VERSION}" \
+            --source-control-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${GITHUB_SHA}"
+
+      - name: Create protocol release tag
+        env:
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${RELEASE_TAG}" -m "Provider protocol ${RELEASE_VERSION}"
+          git push origin "${RELEASE_TAG}"
