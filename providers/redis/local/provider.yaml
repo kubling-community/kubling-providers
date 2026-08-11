@@ -8,4 +8,4 @@ namespaces:
     poolSize: 10
     scanCount: 100
     maxScannedKeys: 10000
-    schemaFile: ../schema.test.yaml
+    schemaFile: ../schema.example.yaml
