@@ -98,6 +98,14 @@ type recordingIterator struct {
 	closeCount atomic.Int32
 }
 
+type pointerScanningIterator struct {
+	t          *testing.T
+	types      map[string]gocql.TypeInfo
+	rows       []map[string]any
+	index      int
+	closeCount atomic.Int32
+}
+
 func (*recordingIterator) Columns() []gocql.ColumnInfo { return nil }
 
 func (i *recordingIterator) MapScan(destination map[string]any) bool {
@@ -114,6 +122,40 @@ func (i *recordingIterator) MapScan(destination map[string]any) bool {
 func (i *recordingIterator) Close() error {
 	i.closeCount.Add(1)
 	return i.closeErr
+}
+
+func (*pointerScanningIterator) Columns() []gocql.ColumnInfo { return nil }
+
+func (i *pointerScanningIterator) MapScan(destination map[string]any) bool {
+	if i.index >= len(i.rows) {
+		return false
+	}
+	for name, typeInfo := range i.types {
+		target, exists := destination[name]
+		if !exists {
+			i.t.Fatalf("scan destination %q is missing", name)
+		}
+		var encoded []byte
+		value := i.rows[i.index][name]
+		if value != nil {
+			var err error
+			encoded, err = gocql.Marshal(typeInfo, value)
+			if err != nil {
+				i.t.Fatalf("marshal %q: %v", name, err)
+			}
+		}
+		if err := gocql.Unmarshal(typeInfo, encoded, target); err != nil {
+			i.t.Fatalf("unmarshal %q: %v", name, err)
+		}
+		destination[name] = reflect.Indirect(reflect.ValueOf(target)).Interface()
+	}
+	i.index++
+	return true
+}
+
+func (i *pointerScanningIterator) Close() error {
+	i.closeCount.Add(1)
+	return nil
 }
 
 func TestQueryTranslatesAndStreamsRows(t *testing.T) {
@@ -188,6 +230,66 @@ func TestQueryTranslatesAndStreamsRows(t *testing.T) {
 	}
 	if session.closeCount.Load() != 1 {
 		t.Fatalf("session Close() calls = %d, want 1", session.closeCount.Load())
+	}
+}
+
+func TestResultStreamPreservesCassandraNullsAndZeroValues(t *testing.T) {
+	collectionType := gocql.NewNativeType(4, gocql.TypeCustom, "map<text,text>")
+	types := map[string]gocql.TypeInfo{
+		"title":     gocql.NewNativeType(4, gocql.TypeText, ""),
+		"completed": gocql.NewNativeType(4, gocql.TypeBoolean, ""),
+		"priority":  gocql.NewNativeType(4, gocql.TypeInt, ""),
+		"labels":    collectionType,
+	}
+	projections := []projectionPlan{
+		{column: &gocql.ColumnMetadata{Name: "title", Type: types["title"]}, outputName: "title"},
+		{column: &gocql.ColumnMetadata{Name: "completed", Type: types["completed"]}, outputName: "completed"},
+		{column: &gocql.ColumnMetadata{Name: "priority", Type: types["priority"]}, outputName: "priority"},
+		{column: &gocql.ColumnMetadata{Name: "labels", Type: collectionType}, outputName: "labels"},
+	}
+	iterator := &pointerScanningIterator{t: t, types: types, rows: []map[string]any{
+		{"title": nil, "completed": nil, "priority": nil, "labels": nil},
+		{"title": "", "completed": false, "priority": 0, "labels": map[string]string{}},
+	}}
+	stream := newCassandraResultStream(
+		&resolvedEntity{},
+		iterator,
+		projections,
+		2,
+	)
+
+	batch, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() error = %v", err)
+	}
+	if len(batch.GetTuples()) != 2 {
+		t.Fatalf("Next() tuples = %d, want 2", len(batch.GetTuples()))
+	}
+	for index, value := range batch.GetTuples()[0].GetValues() {
+		if value.GetNullValue() == nil {
+			t.Fatalf("null tuple value %d = %T, want null", index, value.GetKind())
+		}
+	}
+
+	zeroValues := batch.GetTuples()[1].GetValues()
+	if _, ok := zeroValues[0].GetKind().(*kublingv1.Value_StringValue); !ok {
+		t.Fatalf("empty string kind = %T, want string", zeroValues[0].GetKind())
+	}
+	if _, ok := zeroValues[1].GetKind().(*kublingv1.Value_BooleanValue); !ok {
+		t.Fatalf("false kind = %T, want boolean", zeroValues[1].GetKind())
+	}
+	if _, ok := zeroValues[2].GetKind().(*kublingv1.Value_IntegerValue); !ok {
+		t.Fatalf("zero integer kind = %T, want integer", zeroValues[2].GetKind())
+	}
+	if got := zeroValues[3].GetJsonValue(); got != "{}" {
+		t.Fatalf("empty map JSON = %q, want {}", got)
+	}
+
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+	if iterator.closeCount.Load() != 1 {
+		t.Fatalf("iterator Close() calls = %d, want 1", iterator.closeCount.Load())
 	}
 }
 

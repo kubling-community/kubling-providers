@@ -57,6 +57,15 @@ func TestNativeToValuePreservesNullAndCollectionJSON(t *testing.T) {
 	}
 
 	collectionType := gocql.NewNativeType(4, gocql.TypeCustom, "map<text,text>")
+	var nilCollection map[string]string
+	nullCollection, err := nativeToValue(collectionType, nilCollection)
+	if err != nil {
+		t.Fatalf("null map conversion error = %v", err)
+	}
+	if nullCollection.GetNullValue() == nil {
+		t.Fatalf("null map conversion = %v", nullCollection)
+	}
+
 	jsonValue, err := nativeToValue(collectionType, map[string]string{"sample": "true", "engine": "kubling"})
 	if err != nil {
 		t.Fatalf("map conversion error = %v", err)

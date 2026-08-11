@@ -19,7 +19,7 @@ func nativeToValue(
 	typeInfo gocql.TypeInfo,
 	value any,
 ) (*kublingv1.Value, error) {
-	if value == nil {
+	if isNilNativeValue(value) {
 		return nullProviderValue(), nil
 	}
 	if typeInfo == nil {
@@ -147,6 +147,19 @@ func nativeToValue(
 		}}, nil
 	default:
 		return nil, fmt.Errorf("unsupported Cassandra type %s", nativeTypeName(typeInfo))
+	}
+}
+
+func isNilNativeValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return reflected.IsNil()
+	default:
+		return false
 	}
 }
 
