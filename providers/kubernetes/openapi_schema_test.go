@@ -78,9 +78,11 @@ func TestProviderMetadataExpandsDeploymentFromOpenAPIV3(t *testing.T) {
 	}
 
 	deployment := metadataTable(t, metadata, "DEPLOYMENT")
+	if got, want := deployment.GetAnnotation(), "Deployment enables declarative updates for Pods and ReplicaSets."; got != want {
+		t.Fatalf("DEPLOYMENT annotation = %q, want %q", got, want)
+	}
 	assertExpandedColumn(t, deployment, "metadata__labels", "metadata.labels", kublingv1.ValueType_VALUE_TYPE_JSON, true)
 	assertExpandedColumn(t, deployment, "spec__replicas", "spec.replicas", kublingv1.ValueType_VALUE_TYPE_INTEGER, true)
-	assertExpandedColumn(t, deployment, "spec__readOnlyToken", "spec.readOnlyToken", kublingv1.ValueType_VALUE_TYPE_STRING, false)
 	assertExpandedColumn(t, deployment, "spec__selector__matchLabels", "spec.selector.matchLabels", kublingv1.ValueType_VALUE_TYPE_JSON, true)
 	assertExpandedColumn(t, deployment, "spec__template__metadata__labels", "spec.template.metadata.labels", kublingv1.ValueType_VALUE_TYPE_JSON, true)
 	assertExpandedColumn(t, deployment, "spec__template__spec__containers", "spec.template.spec.containers", kublingv1.ValueType_VALUE_TYPE_JSON, true)
@@ -90,6 +92,19 @@ func TestProviderMetadataExpandsDeploymentFromOpenAPIV3(t *testing.T) {
 	assertExpandedColumn(t, deployment, "status__replicas", "status.replicas", kublingv1.ValueType_VALUE_TYPE_INTEGER, false)
 	assertExpandedColumn(t, deployment, "status__updatedReplicas", "status.updatedReplicas", kublingv1.ValueType_VALUE_TYPE_INTEGER, false)
 
+	for _, name := range []string{"metadata", "spec", "status"} {
+		if metadataColumnExists(deployment, name) {
+			t.Fatalf("expanded object column %q should not coexist with its flattened children", name)
+		}
+	}
+	object := metadataColumn(t, deployment, "object")
+	if !object.GetNullable() {
+		t.Fatal("expanded object escape hatch is not nullable")
+	}
+	if object.GetDefaultExpression() != "" {
+		t.Fatalf("expanded object default = %q, want empty", object.GetDefaultExpression())
+	}
+
 	if deployment.GetProperties()["kubernetes.schema_expansion"] != "openapi_v3" {
 		t.Fatalf("schema expansion property = %q", deployment.GetProperties()["kubernetes.schema_expansion"])
 	}
@@ -98,6 +113,135 @@ func TestProviderMetadataExpandsDeploymentFromOpenAPIV3(t *testing.T) {
 	}
 	if client.closes.Load() != 1 {
 		t.Fatalf("Close() calls = %d, want 1", client.closes.Load())
+	}
+}
+
+func TestProviderMetadataExpandsConfigMapTopLevelFieldsFromOpenAPIV3(t *testing.T) {
+	groupVersion := &staticOpenAPIGroupVersion{
+		contents:          []byte(testConfigMapOpenAPIV3),
+		serverRelativeURL: "/openapi/v3/api/v1?hash=config-map-test",
+	}
+	discoveryClient := &openAPIDiscovery{
+		staticDiscovery: &staticDiscovery{resourceLists: configMapResourceLists()},
+		client: &staticOpenAPIClient{paths: map[string]openapi.GroupVersion{
+			"api/v1": groupVersion,
+		}},
+	}
+	client := &fakeKubernetesClient{discoveryClient: discoveryClient}
+
+	config, err := normalizeConfig(Config{Schema: SchemaConfig{FieldExpansionDepth: 4}})
+	if err != nil {
+		t.Fatalf("normalizeConfig() error = %v", err)
+	}
+	provider := newProvider(config, func(context.Context, Config) (kubernetesClient, error) {
+		return client, nil
+	})
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+
+	configMap := metadataTable(t, metadata, "CONFIG_MAP")
+	if got, want := configMap.GetAnnotation(), "Kubernetes ConfigMap resource from v1"; got != want {
+		t.Fatalf("CONFIG_MAP fallback annotation = %q, want %q", got, want)
+	}
+	assertExpandedColumn(t, configMap, "data", "data", kublingv1.ValueType_VALUE_TYPE_JSON, true)
+	assertExpandedColumn(t, configMap, "binaryData", "binaryData", kublingv1.ValueType_VALUE_TYPE_JSON, true)
+	assertExpandedColumn(t, configMap, "immutable", "immutable", kublingv1.ValueType_VALUE_TYPE_BOOLEAN, true)
+	assertExpandedColumn(t, configMap, "metadata__labels", "metadata.labels", kublingv1.ValueType_VALUE_TYPE_JSON, true)
+
+	if metadataColumnExists(configMap, "apiVersion") {
+		t.Fatal("OpenAPI apiVersion was exposed in addition to canonical api_version")
+	}
+	if !metadataColumnExists(configMap, "api_version") || !metadataColumnExists(configMap, "kind") {
+		t.Fatalf("canonical identity columns are missing: %v", configMap.GetColumns())
+	}
+	for _, name := range []string{"metadata", "spec", "status"} {
+		if metadataColumnExists(configMap, name) {
+			t.Fatalf("expanded ConfigMap unexpectedly exposes document root %q", name)
+		}
+	}
+}
+
+func TestProviderMetadataCanOmitObjectColumn(t *testing.T) {
+	includeObject := false
+	groupVersion := &staticOpenAPIGroupVersion{
+		contents:          []byte(testConfigMapOpenAPIV3),
+		serverRelativeURL: "/openapi/v3/api/v1?hash=config-map-test",
+	}
+	discoveryClient := &openAPIDiscovery{
+		staticDiscovery: &staticDiscovery{resourceLists: configMapResourceLists()},
+		client: &staticOpenAPIClient{paths: map[string]openapi.GroupVersion{
+			"api/v1": groupVersion,
+		}},
+	}
+	client := &fakeKubernetesClient{discoveryClient: discoveryClient}
+
+	config, err := normalizeConfig(Config{Schema: SchemaConfig{
+		FieldExpansionDepth: 4,
+		IncludeObject:       &includeObject,
+	}})
+	if err != nil {
+		t.Fatalf("normalizeConfig() error = %v", err)
+	}
+	provider := newProvider(config, func(context.Context, Config) (kubernetesClient, error) {
+		return client, nil
+	})
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+
+	configMap := metadataTable(t, metadata, "CONFIG_MAP")
+	if metadataColumnExists(configMap, "object") {
+		t.Fatal("object column is present with includeObject=false")
+	}
+	if !metadataColumnExists(configMap, "data") || !metadataColumnExists(configMap, "metadata__labels") {
+		t.Fatalf("expected relationalized columns are missing: %v", configMap.GetColumns())
+	}
+	if metadataColumnExists(configMap, "metadata") {
+		t.Fatal("expanded metadata JSON root should not coexist with metadata children")
+	}
+}
+
+func TestOpenAPIExpansionUsesJSONOnlyAtDepthBoundary(t *testing.T) {
+	groupVersion := &staticOpenAPIGroupVersion{
+		contents:          []byte(testDeploymentOpenAPIV3),
+		serverRelativeURL: "/openapi/v3/apis/apps/v1?hash=depth-boundary",
+	}
+	discoveryClient := &openAPIDiscovery{
+		staticDiscovery: &staticDiscovery{resourceLists: deploymentResourceLists()},
+		client: &staticOpenAPIClient{paths: map[string]openapi.GroupVersion{
+			"apis/apps/v1": groupVersion,
+		}},
+	}
+	client := &fakeKubernetesClient{discoveryClient: discoveryClient}
+
+	config, err := normalizeConfig(Config{Schema: SchemaConfig{FieldExpansionDepth: 2}})
+	if err != nil {
+		t.Fatalf("normalizeConfig() error = %v", err)
+	}
+	provider := newProvider(config, func(context.Context, Config) (kubernetesClient, error) {
+		return client, nil
+	})
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	deployment := metadataTable(t, metadata, "DEPLOYMENT")
+
+	assertExpandedColumn(
+		t, deployment, "spec__template", "spec.template",
+		kublingv1.ValueType_VALUE_TYPE_JSON, true,
+	)
+	if metadataColumnExists(deployment, "spec__template__metadata__labels") {
+		t.Fatal("field below configured depth was unexpectedly flattened")
+	}
+	if metadataColumnExists(deployment, "spec") {
+		t.Fatal("structured parent inside configured depth was exposed as JSON")
 	}
 }
 
@@ -212,9 +356,71 @@ func assertExpandedColumn(
 		t.Fatalf("column %q type = %v, want %v", name, column.GetType(), valueType)
 	}
 	if column.GetUpdatable() != updatable {
-		t.Fatalf("expanded column %q updatable = %v, want %v", name, column.GetUpdatable(), updatable)
+		t.Fatalf("column %q updatable = %v, want %v", name, column.GetUpdatable(), updatable)
 	}
 }
+
+func metadataColumnExists(table *providerv1.TableMetadata, name string) bool {
+	for _, column := range table.GetColumns() {
+		if strings.EqualFold(column.GetName(), name) {
+			return true
+		}
+	}
+	return false
+}
+
+func configMapResourceLists() []*metav1.APIResourceList {
+	return []*metav1.APIResourceList{{
+		GroupVersion: "v1",
+		APIResources: []metav1.APIResource{{
+			Name:       "configmaps",
+			Kind:       "ConfigMap",
+			Namespaced: true,
+			Verbs:      metav1.Verbs{"get", "list", "create", "patch", "update", "delete"},
+		}},
+	}}
+}
+
+const testConfigMapOpenAPIV3 = `{
+  "openapi": "3.0.0",
+  "components": {
+    "schemas": {
+      "io.k8s.api.core.v1.ConfigMap": {
+        "type": "object",
+        "x-kubernetes-group-version-kind": [
+          {"group": "", "version": "v1", "kind": "ConfigMap"}
+        ],
+        "properties": {
+          "apiVersion": {"type": "string"},
+          "kind": {"type": "string"},
+          "metadata": {"$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta"},
+          "immutable": {"type": "boolean"},
+          "data": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          },
+          "binaryData": {
+            "type": "object",
+            "additionalProperties": {"type": "string", "format": "byte"}
+          }
+        }
+      },
+      "io.k8s.apimachinery.pkg.apis.meta.v1.ObjectMeta": {
+        "type": "object",
+        "properties": {
+          "name": {"type": "string"},
+          "namespace": {"type": "string"},
+          "uid": {"type": "string"},
+          "resourceVersion": {"type": "string"},
+          "labels": {
+            "type": "object",
+            "additionalProperties": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}`
 
 func deploymentResourceLists() []*metav1.APIResourceList {
 	return []*metav1.APIResourceList{{
@@ -234,6 +440,7 @@ const testDeploymentOpenAPIV3 = `{
     "schemas": {
       "io.k8s.api.apps.v1.Deployment": {
         "type": "object",
+        "description": "Deployment enables declarative updates for Pods and ReplicaSets.",
         "x-kubernetes-group-version-kind": [
           {"group": "apps", "version": "v1", "kind": "Deployment"}
         ],
@@ -258,10 +465,9 @@ const testDeploymentOpenAPIV3 = `{
       },
       "io.k8s.api.apps.v1.DeploymentSpec": {
         "type": "object",
-		"properties": {
-		  "replicas": {"type": "integer", "format": "int32"},
-		  "readOnlyToken": {"type": "string", "readOnly": true},
-		  "selector": {"$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"},
+        "properties": {
+          "replicas": {"type": "integer", "format": "int32"},
+          "selector": {"$ref": "#/components/schemas/io.k8s.apimachinery.pkg.apis.meta.v1.LabelSelector"},
           "template": {"$ref": "#/components/schemas/io.k8s.api.core.v1.PodTemplateSpec"}
         }
       },

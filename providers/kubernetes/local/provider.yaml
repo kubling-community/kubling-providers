@@ -6,3 +6,6 @@ blankNamespaceStrategy: ALL
 
 schema:
   fieldExpansionDepth: 4
+  resources:
+    "batch/v1/cronjobs":
+      fieldExpansionDepth: 6

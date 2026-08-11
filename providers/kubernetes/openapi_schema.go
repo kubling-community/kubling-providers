@@ -237,9 +237,12 @@ func resourceTableMetadataWithSchema(
 	descriptor *resourceDescriptor,
 	resolver *openAPISchemaResolver,
 	depth int,
+	includeObject bool,
 ) *providerv1.TableMetadata {
-	table := resourceTableMetadata(descriptor)
-	baseColumnCount := len(table.GetColumns())
+	table := resourceTableMetadataWithOptions(descriptor, includeObject)
+	resourceWritable := hasVerb(descriptor.resource.Verbs, "create") ||
+		hasVerb(descriptor.resource.Verbs, "update") ||
+		hasVerb(descriptor.resource.Verbs, "patch")
 	if depth <= 0 || resolver == nil {
 		return table
 	}
@@ -249,20 +252,41 @@ func resourceTableMetadataWithSchema(
 		return table
 	}
 
+	root := resolved.document.resolve(resolved.schema)
+	if root == nil {
+		return table
+	}
+
+	// The resource schema description is the best semantic description available
+	// for the table. Keep the discovery-based annotation as a fallback because
+	// not every API or CRD publishes a description.
+	if description := strings.TrimSpace(root.Description); description != "" {
+		table.Annotation = description
+	}
+
+	// Once OpenAPI successfully describes the resource, relationalization becomes
+	// authoritative for structured document roots. metadata/spec/status are kept
+	// only in compact mode (depth == 0) or when OpenAPI is unavailable. During
+	// expansion, an object is exposed as JSON only at the configured depth
+	// boundary; maps and arrays remain JSON terminal values.
+	table.Columns = removeRelationalizedDocumentColumns(table.GetColumns())
+	makeExpandedObjectColumnOptional(table.GetColumns())
+
 	existing := make(map[string]struct{}, len(table.GetColumns()))
 	for _, column := range table.GetColumns() {
 		existing[strings.ToUpper(column.GetName())] = struct{}{}
 	}
 
-	root := resolved.document.resolve(resolved.schema)
-	if root == nil {
-		return table
+	rootNames := make([]string, 0, len(root.Properties))
+	for rootName := range root.Properties {
+		rootNames = append(rootNames, rootName)
 	}
-	writeColumns := hasVerb(descriptor.resource.Verbs, "create") ||
-		hasVerb(descriptor.resource.Verbs, "update") ||
-		hasVerb(descriptor.resource.Verbs, "patch")
+	sort.Strings(rootNames)
 
-	for _, rootName := range []string{"metadata", "spec", "status"} {
+	for _, rootName := range rootNames {
+		if strings.EqualFold(rootName, "apiVersion") || strings.EqualFold(rootName, "kind") {
+			continue
+		}
 		property := root.Properties[rootName]
 		if property == nil {
 			continue
@@ -273,21 +297,47 @@ func resourceTableMetadataWithSchema(
 			property,
 			[]string{rootName},
 			depth,
-			existing,
-			writeColumns,
+			resourceWritable,
 			false,
+			existing,
 		)
 	}
 
 	if table.Properties == nil {
 		table.Properties = make(map[string]string)
 	}
-	if len(table.GetColumns()) > baseColumnCount {
-		table.Properties["kubernetes.schema_expansion"] = "openapi_v3"
-		table.Properties["kubernetes.field_expansion_depth"] = strconv.Itoa(depth)
-	}
+	table.Properties["kubernetes.schema_expansion"] = "openapi_v3"
+	table.Properties["kubernetes.field_expansion_depth"] = strconv.Itoa(depth)
 
 	return table
+}
+
+func removeRelationalizedDocumentColumns(
+	columns []*providerv1.ColumnMetadata,
+) []*providerv1.ColumnMetadata {
+	result := make([]*providerv1.ColumnMetadata, 0, len(columns))
+	for _, column := range columns {
+		if column == nil {
+			continue
+		}
+		switch strings.ToLower(strings.TrimSpace(column.GetSourceName())) {
+		case "metadata", "spec", "status":
+			continue
+		default:
+			result = append(result, column)
+		}
+	}
+	return result
+}
+
+func makeExpandedObjectColumnOptional(columns []*providerv1.ColumnMetadata) {
+	object := columnByName(columns, "object")
+	if object == nil {
+		return
+	}
+	nullable := true
+	object.Nullable = &nullable
+	object.DefaultExpression = ""
 }
 
 func appendExpandedOpenAPIColumns(
@@ -296,9 +346,9 @@ func appendExpandedOpenAPIColumns(
 	candidate *openAPISchema,
 	path []string,
 	maxDepth int,
+	resourceWritable bool,
+	inheritedReadOnly bool,
 	existing map[string]struct{},
-	writeColumns bool,
-	parentReadOnly bool,
 ) {
 	if candidate == nil || len(path) == 0 || len(path) > maxDepth {
 		return
@@ -308,13 +358,24 @@ func appendExpandedOpenAPIColumns(
 	if resolved == nil {
 		return
 	}
-	readOnly := parentReadOnly || candidate.ReadOnly || resolved.ReadOnly
+
+	readOnly := inheritedReadOnly || resolved.ReadOnly
 
 	if openAPISchemaIsScalar(resolved) {
-		appendOpenAPIColumn(table, resolved, path, existing, openAPISchemaValueType(resolved), writeColumns, readOnly)
+		appendOpenAPIColumn(
+			table,
+			resolved,
+			path,
+			resourceWritable,
+			readOnly,
+			existing,
+			openAPISchemaValueType(resolved),
+		)
 		return
 	}
 
+	// Collections are natural JSON boundaries. Their dynamic keys/items are not
+	// stable relational fields, so they are never flattened further.
 	if openAPISchemaIsCollection(resolved) ||
 		len(resolved.OneOf) > 0 ||
 		len(resolved.AnyOf) > 0 {
@@ -322,23 +383,26 @@ func appendExpandedOpenAPIColumns(
 			table,
 			resolved,
 			path,
+			resourceWritable,
+			readOnly,
 			existing,
 			kublingv1.ValueType_VALUE_TYPE_JSON,
-			writeColumns,
-			readOnly,
 		)
 		return
 	}
 
+	// Structured objects are relationalized while depth remains. Only the
+	// boundary object itself becomes JSON. This keeps one preferred mutation
+	// path instead of exposing both a JSON parent and all of its descendants.
 	if len(path) == maxDepth || len(resolved.Properties) == 0 {
 		appendOpenAPIColumn(
 			table,
 			resolved,
 			path,
+			resourceWritable,
+			readOnly,
 			existing,
 			kublingv1.ValueType_VALUE_TYPE_JSON,
-			writeColumns,
-			readOnly,
 		)
 		return
 	}
@@ -355,9 +419,9 @@ func appendExpandedOpenAPIColumns(
 			resolved.Properties[name],
 			appendPath(path, name),
 			maxDepth,
-			existing,
-			writeColumns,
+			resourceWritable,
 			readOnly,
+			existing,
 		)
 	}
 }
@@ -366,10 +430,10 @@ func appendOpenAPIColumn(
 	table *providerv1.TableMetadata,
 	schema *openAPISchema,
 	path []string,
+	resourceWritable bool,
+	readOnly bool,
 	existing map[string]struct{},
 	valueType kublingv1.ValueType,
-	writeColumns bool,
-	readOnly bool,
 ) {
 	name := strings.Join(path, "__")
 	key := strings.ToUpper(name)
@@ -378,7 +442,7 @@ func appendOpenAPIColumn(
 	}
 
 	nullable := true
-	updatable := writeColumns && !readOnly && kubernetesFieldPathWritable(path)
+	updatable := resourceWritable && !readOnly && kubernetesFieldPathWritable(path)
 	column := &providerv1.ColumnMetadata{
 		Name:          name,
 		SourceName:    strings.Join(path, "."),

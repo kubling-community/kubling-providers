@@ -165,9 +165,14 @@ func (c *Connection) resolveResource(
 
 		return &resolvedResource{
 			descriptor: descriptor,
-			table:      resourceTableMetadataWithSchema(descriptor, resolver, depth),
-			client:     client,
-			strategy:   c.provider.config.BlankNamespaceStrategy,
+			table: resourceTableMetadataWithSchema(
+				descriptor,
+				resolver,
+				depth,
+				c.provider.config.Schema.includeObject(),
+			),
+			client:   client,
+			strategy: c.provider.config.BlankNamespaceStrategy,
 			resource: client.Dynamic().Resource(
 				descriptor.groupVersion.WithResource(descriptor.resource.Name),
 			),
