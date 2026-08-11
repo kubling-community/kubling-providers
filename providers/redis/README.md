@@ -70,5 +70,5 @@ With only Redis and its seed running, execute the real integration test with:
 KUBLING_REDIS_INTEGRATION=1 go test -run TestRedisIntegrationLifecycleAndOperations -v .
 ```
 
-The test uses `local/provider.integration.yaml` so the shared fixture remains
-stable when `local/provider.yaml` is repointed to a project-specific schema.
+The integration test and local provider use `local/provider.yaml`, which points
+to the shared `schema.example.yaml` fixture.

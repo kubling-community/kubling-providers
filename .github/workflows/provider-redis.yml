@@ -11,6 +11,7 @@ on:
       - 'providers/redis/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-redis.yml'
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - 'providers/redis/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-redis.yml'
 
 permissions:
@@ -31,3 +33,38 @@ jobs:
     with:
       module_name: Redis provider
       module_directory: providers/redis
+
+  container:
+    needs: validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: redis
+      provider_directory: providers/redis
+      image_repository: docker.io/kubling/redis-provider
+      image_title: Kubling Redis Provider
+      image_description: Redis provider for Kubling
+    secrets: inherit
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/redis/v')
+    needs:
+      - validate
+      - container
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Redis Provider ${{ needs.container.outputs.version }}"

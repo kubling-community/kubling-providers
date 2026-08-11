@@ -11,6 +11,7 @@ on:
       - 'providers/inmemory/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-inmemory.yml'
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - 'providers/inmemory/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-inmemory.yml'
 
 permissions:
@@ -31,3 +33,38 @@ jobs:
     with:
       module_name: In-memory provider
       module_directory: providers/inmemory
+
+  container:
+    needs: validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: inmemory
+      provider_directory: providers/inmemory
+      image_repository: docker.io/kubling/inmemory-provider
+      image_title: Kubling In-memory Provider
+      image_description: In-memory reference provider for Kubling
+    secrets: inherit
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/inmemory/v')
+    needs:
+      - validate
+      - container
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "In-memory Provider ${{ needs.container.outputs.version }}"

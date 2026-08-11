@@ -11,6 +11,7 @@ on:
       - 'providers/kubernetes/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-kubernetes.yml'
   pull_request:
     branches:
@@ -20,6 +21,7 @@ on:
       - 'providers/kubernetes/**'
       - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-kubernetes.yml'
 
 permissions:
@@ -31,3 +33,38 @@ jobs:
     with:
       module_name: Kubernetes provider
       module_directory: providers/kubernetes
+
+  container:
+    needs: validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: kubernetes
+      provider_directory: providers/kubernetes
+      image_repository: docker.io/kubling/kubernetes-provider
+      image_title: Kubling Kubernetes Provider
+      image_description: Kubernetes provider for Kubling
+    secrets: inherit
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/kubernetes/v')
+    needs:
+      - validate
+      - container
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Kubernetes Provider ${{ needs.container.outputs.version }}"

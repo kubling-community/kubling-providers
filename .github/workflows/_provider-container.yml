@@ -1,0 +1,133 @@
+name: Provider Container
+
+on:
+  workflow_call:
+    inputs:
+      provider_name:
+        description: Provider tag prefix and directory name
+        required: true
+        type: string
+      provider_directory:
+        description: Repository-relative provider directory
+        required: true
+        type: string
+      image_repository:
+        description: Fully qualified Docker image repository
+        required: true
+        type: string
+      image_title:
+        description: OCI image title
+        required: true
+        type: string
+      image_description:
+        description: OCI image description
+        required: true
+        type: string
+    outputs:
+      release:
+        description: Whether this build was triggered by a provider release tag
+        value: ${{ jobs.container.outputs.release }}
+      version:
+        description: Provider version without the leading v
+        value: ${{ jobs.container.outputs.version }}
+      digest:
+        description: Published image digest
+        value: ${{ jobs.container.outputs.digest }}
+    secrets:
+      DOCKERHUB_USERNAME:
+        required: false
+      DOCKERHUB_TOKEN:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  container:
+    name: Build container image
+    runs-on: ubuntu-latest
+
+    outputs:
+      release: ${{ steps.version.outputs.release }}
+      version: ${{ steps.version.outputs.version }}
+      digest: ${{ steps.build.outputs.digest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        env:
+          PROVIDER_NAME: ${{ inputs.provider_name }}
+        run: |
+          release=false
+          stable=false
+          version=dev
+          major_minor=
+
+          if [[ "${GITHUB_REF}" == "refs/tags/providers/${PROVIDER_NAME}/v"* ]]; then
+            tagged_version="${GITHUB_REF_NAME#providers/${PROVIDER_NAME}/}"
+            if [[ ! "${tagged_version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::${GITHUB_REF_NAME} is not a valid ${PROVIDER_NAME} provider semantic version tag."
+              exit 1
+            fi
+
+            version="${tagged_version#v}"
+            core_version="${version%%-*}"
+            major_minor="${core_version%.*}"
+            release=true
+            if [[ "${version}" != *-* ]]; then
+              stable=true
+            fi
+          fi
+
+          echo "release=${release}" >> "${GITHUB_OUTPUT}"
+          echo "stable=${stable}" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "major_minor=${major_minor}" >> "${GITHUB_OUTPUT}"
+
+      - name: Set up QEMU
+        if: steps.version.outputs.release == 'true'
+        uses: docker/setup-qemu-action@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to Docker Hub
+        if: steps.version.outputs.release == 'true'
+        uses: docker/login-action@v4
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Generate image metadata
+        id: metadata
+        uses: docker/metadata-action@v6
+        with:
+          images: ${{ inputs.image_repository }}
+          tags: |
+            type=sha,prefix=sha-
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.release == 'true' }}
+            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.stable == 'true' }}
+            type=raw,value=latest,enable=${{ steps.version.outputs.stable == 'true' }}
+          labels: |
+            org.opencontainers.image.title=${{ inputs.image_title }}
+            org.opencontainers.image.description=${{ inputs.image_description }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
+
+      - name: Build and publish container image
+        id: build
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ${{ inputs.provider_directory }}/Dockerfile
+          platforms: ${{ steps.version.outputs.release == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
+          push: ${{ steps.version.outputs.release == 'true' }}
+          tags: ${{ steps.metadata.outputs.tags }}
+          labels: ${{ steps.metadata.outputs.labels }}
+          cache-from: type=gha,scope=provider-${{ inputs.provider_name }}
+          cache-to: type=gha,mode=max,scope=provider-${{ inputs.provider_name }}
+          provenance: mode=max
+          sbom: true
