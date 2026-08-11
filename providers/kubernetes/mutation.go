@@ -207,6 +207,9 @@ func mutationColumns(table *providerv1.TableMetadata, fields []*providerv1.Field
 		seen[key] = struct{}{}
 		columns = append(columns, column)
 	}
+	if err := validateObjectMutationColumns(columns); err != nil {
+		return nil, err
+	}
 	return columns, nil
 }
 
@@ -448,6 +451,13 @@ func planMutationAssignments(
 		}
 		planned = append(planned, plannedAssignment{column: column, path: path, value: value})
 	}
+	columnsForConflictCheck := make([]*providerv1.ColumnMetadata, 0, len(planned))
+	for _, assignment := range planned {
+		columnsForConflictCheck = append(columnsForConflictCheck, assignment.column)
+	}
+	if err := validateObjectMutationColumns(columnsForConflictCheck); err != nil {
+		return nil, err
+	}
 	return planned, nil
 }
 
@@ -572,6 +582,43 @@ func applyPlannedPaths(object map[string]any, assignments []plannedAssignment) e
 	return nil
 }
 
+func validateObjectMutationColumns(columns []*providerv1.ColumnMetadata) error {
+	hasObject := false
+	for _, column := range columns {
+		if column != nil && strings.EqualFold(strings.TrimSpace(column.GetSourceName()), "$") {
+			hasObject = true
+			break
+		}
+	}
+	if !hasObject {
+		return nil
+	}
+
+	for _, column := range columns {
+		if column == nil {
+			continue
+		}
+		sourceName := strings.TrimSpace(column.GetSourceName())
+		if sourceName == "$" || objectMutationIdentitySource(sourceName) {
+			continue
+		}
+		return fmt.Errorf(
+			"column %q cannot be combined with object in the same Kubernetes mutation",
+			column.GetName(),
+		)
+	}
+	return nil
+}
+
+func objectMutationIdentitySource(sourceName string) bool {
+	switch sourceName {
+	case "apiVersion", "kind", "metadata.name", "metadata.namespace":
+		return true
+	default:
+		return false
+	}
+}
+
 func mutationColumnPath(column *providerv1.ColumnMetadata) ([]string, error) {
 	if column == nil {
 		return nil, fmt.Errorf("column is required")
@@ -590,6 +637,39 @@ func mutationColumnPath(column *providerv1.ColumnMetadata) ([]string, error) {
 		}
 	}
 	return path, nil
+}
+
+func kubernetesFieldPathWritable(path []string) bool {
+	if len(path) == 0 {
+		return false
+	}
+
+	switch path[0] {
+	case "apiVersion", "kind", "status":
+		return false
+	case "metadata":
+		if len(path) == 1 {
+			return true
+		}
+
+		switch path[1] {
+		case "uid",
+			"resourceVersion",
+			"generation",
+			"creationTimestamp",
+			"deletionTimestamp",
+			"deletionGracePeriodSeconds",
+			"managedFields",
+			"selfLink",
+			"name",
+			"namespace":
+			return false
+		default:
+			return true
+		}
+	default:
+		return true
+	}
 }
 
 func kubernetesMutationValue(value *kublingv1.Value, valueType kublingv1.ValueType) (any, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"reflect"
 	"sync"
 
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
@@ -70,7 +71,7 @@ func (s *cassandraResultStream) Next(
 
 	tuples := make([]*providerv1.Tuple, 0, s.batchSize)
 	for len(tuples) < s.batchSize {
-		row := make(map[string]any, len(s.projections))
+		row := newScanRow(s.projections)
 		if !s.iterator.MapScan(row) {
 			closeErr := s.closeIteratorLocked()
 			s.done = true
@@ -90,7 +91,7 @@ func (s *cassandraResultStream) Next(
 		for _, projection := range s.projections {
 			value, err := nativeToValue(
 				projection.column.Type,
-				row[projection.column.Name],
+				scannedValue(row[projection.column.Name]),
 			)
 			if err != nil {
 				closeErr := s.closeIteratorLocked()
@@ -114,6 +115,36 @@ func (s *cassandraResultStream) Next(
 		Fields: s.fields,
 		Tuples: tuples,
 	}, nil
+}
+
+func newScanRow(projections []projectionPlan) map[string]any {
+	row := make(map[string]any, len(projections))
+	for _, projection := range projections {
+		typeInfo := projection.column.Type
+		if typeInfo == nil {
+			continue
+		}
+		valueType := reflect.TypeOf(typeInfo.Zero())
+		if valueType == nil {
+			continue
+		}
+		row[projection.column.Name] = reflect.New(reflect.PointerTo(valueType)).Interface()
+	}
+	return row
+}
+
+func scannedValue(value any) any {
+	if value == nil {
+		return nil
+	}
+	reflected := reflect.ValueOf(value)
+	if reflected.Kind() != reflect.Pointer {
+		return value
+	}
+	if reflected.IsNil() {
+		return nil
+	}
+	return reflected.Elem().Interface()
 }
 
 func (s *cassandraResultStream) Close() error {

@@ -68,7 +68,12 @@ func buildMetadataWithSchema(
 		)
 		metadata.Tables = append(
 			metadata.Tables,
-			resourceTableMetadataWithSchema(descriptor, resolver, depth),
+			resourceTableMetadataWithSchema(
+				descriptor,
+				resolver,
+				depth,
+				schemaConfig.includeObject(),
+			),
 		)
 	}
 	sort.Slice(metadata.Tables, func(left int, right int) bool {
@@ -198,6 +203,13 @@ func assignTableNames(descriptors []*resourceDescriptor) {
 }
 
 func resourceTableMetadata(descriptor *resourceDescriptor) *providerv1.TableMetadata {
+	return resourceTableMetadataWithOptions(descriptor, true)
+}
+
+func resourceTableMetadataWithOptions(
+	descriptor *resourceDescriptor,
+	includeObject bool,
+) *providerv1.TableMetadata {
 	insertable := hasVerb(descriptor.resource.Verbs, "create")
 	mutable := hasVerb(descriptor.resource.Verbs, "update") || hasVerb(descriptor.resource.Verbs, "patch")
 	deletable := hasVerb(descriptor.resource.Verbs, "delete")
@@ -223,7 +235,7 @@ func resourceTableMetadata(descriptor *resourceDescriptor) *providerv1.TableMeta
 		properties["kubernetes.categories"] = strings.Join(descriptor.resource.Categories, ",")
 	}
 
-	columns := resourceColumns(descriptor, insertable, mutable)
+	columns := resourceColumnsWithOptions(descriptor, insertable, mutable, includeObject)
 	primaryColumns := []string{"metadata__name"}
 	if descriptor.resource.Namespaced {
 		primaryColumns = []string{"metadata__namespace", "metadata__name"}
@@ -254,6 +266,15 @@ func resourceTableMetadata(descriptor *resourceDescriptor) *providerv1.TableMeta
 }
 
 func resourceColumns(descriptor *resourceDescriptor, insertable bool, mutable bool) []*providerv1.ColumnMetadata {
+	return resourceColumnsWithOptions(descriptor, insertable, mutable, true)
+}
+
+func resourceColumnsWithOptions(
+	descriptor *resourceDescriptor,
+	insertable bool,
+	mutable bool,
+	includeObject bool,
+) []*providerv1.ColumnMetadata {
 	notNullable := false
 	nullable := true
 	notUpdatable := false
@@ -277,13 +298,17 @@ func resourceColumns(descriptor *resourceDescriptor, insertable bool, mutable bo
 		jsonColumn("metadata", "metadata", &notNullable, &documentInput),
 		jsonColumn("spec", "spec", &nullable, &documentInput),
 		jsonColumn("status", "status", &nullable, &notUpdatable),
-		jsonColumn("object", "$", &notNullable, &documentInput),
 	)
+	if includeObject {
+		columns = append(columns, jsonColumn("object", "$", &notNullable, &documentInput))
+	}
 	if insertable {
 		columns[0].DefaultExpression = sqlStringLiteralDefault(descriptor.groupVersion.String())
 		columns[1].DefaultExpression = sqlStringLiteralDefault(descriptor.resource.Kind)
 		columnByName(columns, "metadata").DefaultExpression = "jsonParse('{}', true)"
-		columnByName(columns, "object").DefaultExpression = "jsonParse('{}', true)"
+		if object := columnByName(columns, "object"); object != nil {
+			object.DefaultExpression = "jsonParse('{}', true)"
+		}
 	}
 	return columns
 }
@@ -339,25 +364,6 @@ func jsonColumn(
 func hasVerb(verbs metav1.Verbs, expected string) bool {
 	for _, verb := range verbs {
 		if verb == expected {
-			return true
-		}
-	}
-	return false
-}
-
-func kubernetesFieldPathWritable(path []string) bool {
-	if len(path) == 0 {
-		return false
-	}
-	switch path[0] {
-	case "spec":
-		return true
-	case "metadata":
-		if len(path) == 1 {
-			return true
-		}
-		switch path[1] {
-		case "annotations", "finalizers", "labels", "ownerReferences":
 			return true
 		}
 	}

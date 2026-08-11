@@ -46,6 +46,7 @@ type Config struct {
 // structured resource fields are expanded into relational columns.
 type SchemaConfig struct {
 	FieldExpansionDepth int
+	IncludeObject       *bool
 	Include             []string
 	Exclude             []string
 	Resources           map[string]ResourceSchemaConfig
@@ -70,6 +71,7 @@ type fileConfig struct {
 
 type fileSchemaConfig struct {
 	FieldExpansionDepth int                                 `yaml:"fieldExpansionDepth"`
+	IncludeObject       *bool                               `yaml:"includeObject"`
 	Include             []string                            `yaml:"include"`
 	Exclude             []string                            `yaml:"exclude"`
 	Resources           map[string]fileResourceSchemaConfig `yaml:"resources"`
@@ -80,8 +82,8 @@ type fileResourceSchemaConfig struct {
 }
 
 // LoadConfig reads a strict Kubernetes provider YAML configuration.
-func LoadConfig(path string) (Config, error) {
-	file, err := os.Open(path)
+func LoadConfig(configPath string) (Config, error) {
+	file, err := os.Open(configPath)
 	if err != nil {
 		return Config{}, fmt.Errorf("open Kubernetes provider config: %w", err)
 	}
@@ -127,9 +129,9 @@ func (c fileSchemaConfig) toConfig() SchemaConfig {
 			FieldExpansionDepth: copyIntPointer(config.FieldExpansionDepth),
 		}
 	}
-
 	return SchemaConfig{
 		FieldExpansionDepth: c.FieldExpansionDepth,
+		IncludeObject:       copyBoolPointer(c.IncludeObject),
 		Include:             append([]string(nil), c.Include...),
 		Exclude:             append([]string(nil), c.Exclude...),
 		Resources:           resources,
@@ -151,7 +153,6 @@ func normalizeConfig(config Config) (Config, error) {
 	normalized := config
 	normalized.Kubeconfig = strings.TrimSpace(config.Kubeconfig)
 	normalized.Context = strings.TrimSpace(config.Context)
-
 	if normalized.InCluster && (normalized.Kubeconfig != "" || normalized.Context != "") {
 		return Config{}, errors.New("inCluster cannot be combined with kubeconfig or context")
 	}
@@ -169,23 +170,15 @@ func normalizeConfig(config Config) (Config, error) {
 		return Config{}, errors.New("burst must not be negative")
 	}
 
-	strategy := BlankNamespaceStrategy(
-		strings.ToUpper(
-			strings.TrimSpace(string(config.BlankNamespaceStrategy)),
-		),
-	)
+	strategy := BlankNamespaceStrategy(strings.ToUpper(strings.TrimSpace(string(config.BlankNamespaceStrategy))))
 	if strategy == "" {
 		strategy = BlankNamespaceDefault
 	}
-
 	switch strategy {
 	case BlankNamespaceDefault, BlankNamespaceAll, BlankNamespaceFail:
 		normalized.BlankNamespaceStrategy = strategy
 	default:
-		return Config{}, fmt.Errorf(
-			"invalid blank namespace strategy %q",
-			config.BlankNamespaceStrategy,
-		)
+		return Config{}, fmt.Errorf("invalid blank namespace strategy %q", config.BlankNamespaceStrategy)
 	}
 
 	schemaConfig, err := normalizeSchemaConfig(config.Schema)
@@ -193,123 +186,72 @@ func normalizeConfig(config Config) (Config, error) {
 		return Config{}, fmt.Errorf("schema: %w", err)
 	}
 	normalized.Schema = schemaConfig
-
 	return normalized, nil
 }
 
 func normalizeSchemaConfig(config SchemaConfig) (SchemaConfig, error) {
 	if config.FieldExpansionDepth < 0 {
-		return SchemaConfig{}, errors.New(
-			"fieldExpansionDepth must not be negative",
-		)
+		return SchemaConfig{}, errors.New("fieldExpansionDepth must not be negative")
 	}
 
 	include, err := normalizeResourcePatterns("include", config.Include)
 	if err != nil {
 		return SchemaConfig{}, err
 	}
-
 	exclude, err := normalizeResourcePatterns("exclude", config.Exclude)
 	if err != nil {
 		return SchemaConfig{}, err
 	}
 
-	resources := make(
-		map[string]ResourceSchemaConfig,
-		len(config.Resources),
-	)
-
+	resources := make(map[string]ResourceSchemaConfig, len(config.Resources))
 	for rawKey, candidate := range config.Resources {
 		key, err := normalizeResourceKey(rawKey)
 		if err != nil {
-			return SchemaConfig{}, fmt.Errorf(
-				"resource %q: %w",
-				rawKey,
-				err,
-			)
+			return SchemaConfig{}, fmt.Errorf("resource %q: %w", rawKey, err)
 		}
-
 		if _, exists := resources[key]; exists {
-			return SchemaConfig{}, fmt.Errorf(
-				"duplicate resource %q",
-				key,
-			)
+			return SchemaConfig{}, fmt.Errorf("duplicate resource %q", key)
 		}
-
-		if candidate.FieldExpansionDepth != nil &&
-			*candidate.FieldExpansionDepth < 0 {
-			return SchemaConfig{}, fmt.Errorf(
-				"resource %q fieldExpansionDepth must not be negative",
-				key,
-			)
+		if candidate.FieldExpansionDepth != nil && *candidate.FieldExpansionDepth < 0 {
+			return SchemaConfig{}, fmt.Errorf("resource %q fieldExpansionDepth must not be negative", key)
 		}
-
 		resources[key] = ResourceSchemaConfig{
-			FieldExpansionDepth: copyIntPointer(
-				candidate.FieldExpansionDepth,
-			),
+			FieldExpansionDepth: copyIntPointer(candidate.FieldExpansionDepth),
 		}
 	}
 
 	return SchemaConfig{
 		FieldExpansionDepth: config.FieldExpansionDepth,
+		IncludeObject:       copyBoolPointer(config.IncludeObject),
 		Include:             include,
 		Exclude:             exclude,
 		Resources:           resources,
 	}, nil
 }
 
-func normalizeResourcePatterns(
-	name string,
-	patterns []string,
-) ([]string, error) {
+func normalizeResourcePatterns(name string, patterns []string) ([]string, error) {
 	normalized := make([]string, 0, len(patterns))
 	seen := make(map[string]struct{}, len(patterns))
-
 	for index, rawPattern := range patterns {
 		pattern := strings.ToLower(strings.TrimSpace(rawPattern))
-
 		if pattern == "" {
-			return nil, fmt.Errorf(
-				"%s pattern %d must not be blank",
-				name,
-				index,
-			)
+			return nil, fmt.Errorf("%s pattern %d must not be blank", name, index)
 		}
-
 		if strings.ContainsAny(pattern, " \t\r\n") {
-			return nil, fmt.Errorf(
-				"%s pattern %q must not contain whitespace",
-				name,
-				rawPattern,
-			)
+			return nil, fmt.Errorf("%s pattern %q must not contain whitespace", name, rawPattern)
 		}
-
 		if !strings.Contains(pattern, "/") {
-			return nil, fmt.Errorf(
-				"%s pattern %q must use groupVersion/resource form",
-				name,
-				rawPattern,
-			)
+			return nil, fmt.Errorf("%s pattern %q must use groupVersion/resource form", name, rawPattern)
 		}
-
 		if _, err := path.Match(pattern, "v1/pods"); err != nil {
-			return nil, fmt.Errorf(
-				"invalid %s pattern %q: %w",
-				name,
-				rawPattern,
-				err,
-			)
+			return nil, fmt.Errorf("invalid %s pattern %q: %w", name, rawPattern, err)
 		}
-
 		if _, exists := seen[pattern]; exists {
 			continue
 		}
-
 		seen[pattern] = struct{}{}
 		normalized = append(normalized, pattern)
 	}
-
 	return normalized, nil
 }
 
@@ -318,47 +260,29 @@ func normalizeResourceKey(value string) (string, error) {
 	if key == "" {
 		return "", errors.New("key must not be blank")
 	}
-
 	if strings.ContainsAny(key, " \t\r\n") {
 		return "", errors.New("key must not contain whitespace")
 	}
 
 	separator := strings.LastIndex(key, "/")
 	if separator <= 0 || separator == len(key)-1 {
-		return "", errors.New(
-			"key must use groupVersion/resource form",
-		)
+		return "", errors.New("key must use groupVersion/resource form")
 	}
-
 	groupVersion := key[:separator]
 	resource := key[separator+1:]
-
 	parsed, err := k8sschema.ParseGroupVersion(groupVersion)
 	if err != nil || parsed.Version == "" {
-		return "", fmt.Errorf(
-			"invalid Kubernetes groupVersion %q",
-			groupVersion,
-		)
+		return "", fmt.Errorf("invalid Kubernetes groupVersion %q", groupVersion)
 	}
-
 	if resource == "" || strings.Contains(resource, "/") {
-		return "", fmt.Errorf(
-			"invalid Kubernetes resource %q",
-			resource,
-		)
+		return "", fmt.Errorf("invalid Kubernetes resource %q", resource)
 	}
-
 	return groupVersion + "/" + resource, nil
 }
 
-func (c SchemaConfig) includesResource(
-	groupVersion string,
-	resource string,
-) bool {
+func (c SchemaConfig) includesResource(groupVersion string, resource string) bool {
 	key := resourceKey(groupVersion, resource)
-
 	included := len(c.Include) == 0
-
 	for _, pattern := range c.Include {
 		matched, _ := path.Match(pattern, key)
 		if matched {
@@ -366,50 +290,46 @@ func (c SchemaConfig) includesResource(
 			break
 		}
 	}
-
 	if !included {
 		return false
 	}
-
 	for _, pattern := range c.Exclude {
 		matched, _ := path.Match(pattern, key)
 		if matched {
 			return false
 		}
 	}
-
 	return true
 }
 
-func (c SchemaConfig) expansionDepth(
-	groupVersion string,
-	resource string,
-) int {
+func (c SchemaConfig) expansionDepth(groupVersion string, resource string) int {
 	depth := c.FieldExpansionDepth
-
 	if override, exists := c.Resources[resourceKey(groupVersion, resource)]; exists && override.FieldExpansionDepth != nil {
 		depth = *override.FieldExpansionDepth
 	}
-
 	return depth
 }
 
-func resourceKey(
-	groupVersion string,
-	resource string,
-) string {
-	return strings.ToLower(
-		strings.TrimSpace(groupVersion) +
-			"/" +
-			strings.TrimSpace(resource),
-	)
+func (c SchemaConfig) includeObject() bool {
+	return c.IncludeObject == nil || *c.IncludeObject
+}
+
+func resourceKey(groupVersion string, resource string) string {
+	return strings.ToLower(strings.TrimSpace(groupVersion) + "/" + strings.TrimSpace(resource))
 }
 
 func copyIntPointer(value *int) *int {
 	if value == nil {
 		return nil
 	}
+	copied := *value
+	return &copied
+}
 
+func copyBoolPointer(value *bool) *bool {
+	if value == nil {
+		return nil
+	}
 	copied := *value
 	return &copied
 }
@@ -419,74 +339,51 @@ func buildRESTConfig(config Config) (*rest.Config, error) {
 	return restConfig, err
 }
 
-func loadClientConfiguration(
-	config Config,
-) (*rest.Config, string, error) {
+func loadClientConfiguration(config Config) (*rest.Config, string, error) {
 	var (
 		restConfig       *rest.Config
 		defaultNamespace string
 		err              error
 	)
-
 	if config.InCluster {
 		restConfig, err = rest.InClusterConfig()
 		defaultNamespace = inClusterNamespace()
 	} else {
 		loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
 		loadingRules.ExplicitPath = config.Kubeconfig
-
-		overrides := &clientcmd.ConfigOverrides{
-			CurrentContext: config.Context,
-		}
-
-		deferred := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-			loadingRules,
-			overrides,
-		)
-
+		overrides := &clientcmd.ConfigOverrides{CurrentContext: config.Context}
+		deferred := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
 		restConfig, err = deferred.ClientConfig()
 		if err == nil {
 			defaultNamespace, _, err = deferred.Namespace()
 		}
 	}
-
 	if err != nil {
-		return nil, "", fmt.Errorf(
-			"load Kubernetes client configuration: %w",
-			err,
-		)
+		return nil, "", fmt.Errorf("load Kubernetes client configuration: %w", err)
 	}
-
 	if strings.TrimSpace(defaultNamespace) == "" {
 		defaultNamespace = metav1.NamespaceDefault
 	}
 
 	restConfig.Timeout = config.RequestTimeout
-
 	if config.QPS > 0 {
 		restConfig.QPS = config.QPS
 	}
-
 	if config.Burst > 0 {
 		restConfig.Burst = config.Burst
 	}
-
 	return restConfig, defaultNamespace, nil
 }
 
 func inClusterNamespace() string {
-	if namespace := strings.TrimSpace(
-		os.Getenv("POD_NAMESPACE"),
-	); namespace != "" {
+	if namespace := strings.TrimSpace(os.Getenv("POD_NAMESPACE")); namespace != "" {
 		return namespace
 	}
-
 	contents, err := os.ReadFile(inClusterNamespacePath)
 	if err == nil {
 		if namespace := strings.TrimSpace(string(contents)); namespace != "" {
 			return namespace
 		}
 	}
-
 	return metav1.NamespaceDefault
 }

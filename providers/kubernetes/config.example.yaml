@@ -69,3 +69,8 @@ schema:
 
     "batch/v1/jobs":
       fieldExpansionDepth: 2
+
+  # Keep the full original Kubernetes resource JSON as the "object" column.
+  # Defaults to true for backward compatibility. Disable it when the full
+  # document is not needed, especially to avoid duplicating it in SELECT *.
+  includeObject: false

@@ -39,8 +39,14 @@ consumed directly by Go tooling.
 
 - Protocol definitions are published to `buf.build/kubling/kubling-providers`.
 - Go SDK releases use tags such as `sdk-go/v0.1.0`.
-- Official provider releases use tags such as
-  `providers/cassandra/v0.1.0`.
+- Official provider releases use tags such as `providers/kubernetes/v0.1.0`.
+
+A provider tag validates its Go module, builds `linux/amd64` and `linux/arm64`
+images, pushes `docker.io/kubling/<provider>-provider`, and creates a GitHub
+Release. Stable versions publish `MAJOR.MINOR.PATCH`, `MAJOR.MINOR` and
+`latest`; prereleases publish only their exact version. Configure the
+repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` before creating
+the first provider tag.
 
 Provider-specific configuration and local environments are documented in each
 provider directory.
