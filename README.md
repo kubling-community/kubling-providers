@@ -17,8 +17,8 @@ with regular Go interfaces.
   conformance guidance. Each provider owns its configuration, documentation,
   source-specific behavior and release lifecycle.
 
-Each Go SDK or provider directory is an independent Go module. Run validation
-from the module being changed:
+The Go SDK and each provider implementation are independent Go modules. Run
+validation from the module being changed:
 
 ```sh
 cd sdk-go

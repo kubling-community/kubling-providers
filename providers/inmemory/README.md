@@ -16,7 +16,7 @@ with the canonical project, task, audit and type-coverage records.
 From this directory:
 
 ```sh
-/usr/local/go/bin/go run ./cmd/inmemory --listen :50051
+go run ./cmd/inmemory --listen :50051
 ```
 
 The server enables gRPC reflection for local inspection with tools such as
