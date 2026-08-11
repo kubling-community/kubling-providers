@@ -1,0 +1,21 @@
+---
+name: "ProviderTestVDB"
+version: "1"
+
+dataSources:
+  - name: "provider"
+    dataSourceType: "PROVIDER_GRPC"
+    configObject:
+      address: "{{ KUBLING_GRPC_PROVIDER_HOST | default("host.docker.internal") }}"
+      port: {{ KUBLING_GRPC_PROVIDER_PORT | default("50051") }}
+      timeoutMillis: {{ KUBLING_GRPC_PROVIDER_TIMEOUT_MILLIS | default("30000") }}
+      securityConfig:
+        mode: "PLAINTEXT"
+      cache:
+        enabled: false
+      softTransactions:
+        enabled: false
+      contributesToHealth: true
+    schema:
+      type: "PHYSICAL"
+      cacheDefaultStrategy: "NO_CACHE"

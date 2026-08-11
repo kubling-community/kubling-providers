@@ -81,6 +81,10 @@ The fixture creates `kubling-sample` and `kubling-secondary`, equivalent
 ConfigMaps in both namespaces, a Secret, and a zero-replica Deployment. The
 Deployment never pulls its declared image.
 
+This is a [source-shaped test fixture](../../testing/README.md): it preserves
+the Kubernetes resource catalog instead of forcing the canonical tabular
+schema onto the provider.
+
 Useful lifecycle and inspection commands are:
 
 ```sh

@@ -11,6 +11,10 @@ source changes would use the invalidation controller returned by `cache.Wrap`.
 Every logical connection sees the same provider-owned catalog. The store starts
 with the canonical project, task, audit and type-coverage records.
 
+Its data model implements the [canonical-schema test
+profile](../../testing/profiles/canonical-schema/README.md), making this
+provider the smallest fixture for shared Kubling compatibility checks.
+
 ## Run
 
 From this directory:

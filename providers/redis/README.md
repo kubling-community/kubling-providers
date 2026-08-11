@@ -54,7 +54,9 @@ namespace key in `config.example.yaml`.
 ## Local environment
 
 The local fixture starts Redis, seeds the same project-management domain used
-by the other sample providers, and runs the gRPC provider on `:50053`:
+by the [canonical-schema test
+profile](../../testing/profiles/canonical-schema/README.md), and runs the gRPC
+provider on `:50053`:
 
 ```sh
 ./local/run.sh
