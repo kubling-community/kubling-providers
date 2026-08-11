@@ -32,7 +32,7 @@ run_provider() {
         GOFLAGS="${GOFLAGS:--buildvcs=false}" \
         "${go_bin}" run ./cmd/redis \
         -config "${SCRIPT_DIR}/provider.yaml" \
-        -listen "${KUBLING_REDIS_PROVIDER_LISTEN:-:50052}"
+        -listen "${KUBLING_REDIS_PROVIDER_LISTEN:-:50053}"
 }
 
 case "${COMMAND}" in

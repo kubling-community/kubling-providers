@@ -1,0 +1,23 @@
+transports:
+  grpc:
+    bindAddress: "0.0.0.0"
+    portNumber: {{ GRPC_TRANSPORT_PORT | default("50051") }}
+  nativeProtocol:
+    enable: false
+  pgProtocol:
+    enable: false
+
+vdb:
+  descriptorBundle: {{ DESCRIPTOR_BUNDLE }}
+
+management:
+  enableRestartEndpoint: false
+
+cache:
+  enableInvalidateEndpoint: false
+
+buffer:
+  useDisk: false
+
+kublingAgent:
+  enabled: false

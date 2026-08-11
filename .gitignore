@@ -31,3 +31,6 @@ Thumbs.db
 # Temporary files
 *.tmp
 *.log
+
+# Generated local integration bundles
+/testing/kubling/provider-test-descriptor-bundle.zip

@@ -5,39 +5,32 @@ configured keyspace into one data universe. Endpoints, credentials and routing
 remain inside the provider process and are never sent through the gRPC
 protocol.
 
-## Current implementation
+## What it supports
 
-The provider currently includes:
+A single provider can connect to several Cassandra keyspaces. Each one is
+configured as a logical namespace with its own hosts, authentication, TLS,
+consistency and timeout settings. Connections to the same namespace share a
+driver session, and the provider keeps that session alive until its last user
+releases it.
 
-- strict external YAML configuration;
-- multiple logical namespaces backed by Cassandra keyspaces;
-- authentication, TLS, consistency and timeout settings;
-- shared Cassandra driver sessions with coordinated creation and safe release;
-- dynamic provider-neutral metadata discovery across every configured
-  namespace;
-- parameterized query translation with field projections, filters, ordering,
-  limits and incremental result batches;
-- parameterized insert, update and delete operations;
-- Cassandra-to-Kubling value conversion for native scalar and structured
-  types;
-- an executable gRPC server;
-- explicit rejection of native transaction operations.
+Schema discovery reads Cassandra's native catalog and returns structured
+metadata to Kubling. Tables and columns have deterministic ordering, and the
+metadata preserves native types, primary keys, partition and clustering keys,
+index searchability and Cassandra-specific properties. Kubling always asks for
+the complete catalog and may filter it locally; cluster and keyspace selection
+remain private provider configuration.
 
-The provider advertises the exact subset it can push down. Comparisons support
-`=`, `<`, `<=`, `>` and `>=`; logical composition supports `AND`; limits and
-ordering are supported, while offsets and explicit null ordering are not.
-Cassandra may still reject a query when its table-specific partition and
-clustering-key rules do not permit the requested filter or ordering. Updates
-and deletes require a filter, primary-key columns cannot be updated, and
-generated or returning insert values are not supported. Cassandra does not
-report affected row counts for update or delete operations.
+Queries are translated to parameterized CQL and streamed back in incremental
+batches. The provider handles projections, limits, ordering, `AND`, and the
+comparison operators `=`, `<`, `<=`, `>` and `>=`. It does not advertise
+offsets or explicit null ordering. Cassandra's own partition and clustering
+rules still apply, so the database may reject a filter or ordering that is not
+valid for a particular table.
 
-Schema discovery returns structured metadata rather than generated DDL. It
-includes deterministic table and column ordering, logical and native types,
-primary keys, partition and clustering key information, index searchability
-and Cassandra-specific extension properties. Kubling requests the complete
-catalog and may filter imported metadata locally; it never selects a Cassandra
-cluster or keyspace through the provider protocol.
+Insert, update and delete operations also use parameterized CQL. Updates and
+deletes require a filter, primary-key columns cannot be updated, and inserts do
+not support generated or returning values. Cassandra does not report affected
+row counts for updates or deletes.
 
 [`schema.example.sql`](schema.example.sql) shows the logical Kubling DDL
 equivalent of the native [`local/schema.cql`](local/schema.cql) fixture. It is
@@ -46,7 +39,7 @@ includes `"kbl.namespace" 'sample'` because a static DDL must preserve the
 opaque namespace that `TableMetadata.namespace` carries in the structured
 metadata path. Kubling uses that property when routing operations back to the
 provider. The example value `sample` matches the namespace key in
-`local/provider.yaml`.
+[`local/provider.yaml`](local/provider.yaml).
 
 Native Cassandra transactions are not advertised. Kubling may provide its soft
 transaction behavior above this provider, but Cassandra never contains a real
@@ -118,10 +111,11 @@ iteration faster. Available lifecycle commands are:
 provider. Set `KUBLING_CASSANDRA_PROVIDER_LISTEN` to change the gRPC address or
 `CASSANDRA_IMAGE` to test another Cassandra image.
 
-The fixture follows the shared guidance in `../conformance/README.md`. Native
-Cassandra types cannot represent every Kubling logical type exactly, so common
-tests should validate advertised capabilities and logical behavior separately
-from source-specific type mappings.
+The fixture implements the [canonical-schema test
+profile](../../testing/profiles/canonical-schema/README.md). Native Cassandra
+types cannot represent every Kubling logical type exactly, so common tests
+should validate advertised capabilities and logical behavior separately from
+source-specific type mappings.
 
 With the local Cassandra fixture running, execute the real gRPC integration
 test with:

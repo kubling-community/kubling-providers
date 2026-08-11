@@ -13,12 +13,14 @@ with regular Go interfaces.
 
 - `proto/` — provider gRPC contract, published through Buf.
 - `sdk-go/` — generated Go contract and provider server SDK.
-- `providers/` — independent provider implementations, examples and shared
-  conformance guidance. Each provider owns its configuration, documentation,
-  source-specific behavior and release lifecycle.
+- `providers/` — independent provider implementations and examples. Each
+  provider owns its configuration, documentation, source-specific behavior and
+  release lifecycle.
+- `testing/` — shared testing profiles and a dynamic Kubling compatibility
+  template.
 
-Each Go SDK or provider directory is an independent Go module. Run validation
-from the module being changed:
+The Go SDK and each provider implementation are independent Go modules. Run
+validation from the module being changed:
 
 ```sh
 cd sdk-go
@@ -34,6 +36,16 @@ cd sdk-go && go mod tidy
 
 Generated Go protobuf sources are committed so tagged SDK versions can be
 consumed directly by Go tooling.
+
+## Contributing
+
+Contributions written by hand or with the help of a coding agent are welcome.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow, review
+expectations and a practical guide to starting a new provider.
+
+Provider authors can use the [testing guide](testing/README.md) to validate the
+gRPC implementation directly and through a real Kubling VDB without writing
+DDL.
 
 ## Releases
 
