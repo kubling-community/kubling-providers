@@ -1,6 +1,6 @@
 module github.com/kubling-community/kubling-providers/providers/cassandra
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/apache/cassandra-gocql-driver/v2 v2.1.2

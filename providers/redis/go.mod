@@ -1,6 +1,6 @@
 module github.com/kubling-community/kubling-providers/providers/redis
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/kubling-community/kubling-grpc/sdk-go v0.1.1
