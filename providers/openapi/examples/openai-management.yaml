@@ -1,0 +1,108 @@
+# This example exposes OpenAI organization administration, audit, usage and
+# cost endpoints as relational tables. It uses the official OpenAPI document;
+# no OpenAI-specific behavior is implemented by the provider.
+#
+# OPENAI_ADMIN_KEY must be an organization Admin API key. Usage and costs need
+# an explicit Unix start time because the corresponding API parameters are
+# required. The usage and cost tables expose one row per time bucket; each
+# bucket's results property remains JSON and can be expanded by Kubling into
+# synthetic relational tables when a finer-grained view is needed.
+specFile: https://raw.githubusercontent.com/openai/openai-openapi/refs/heads/main/openapi.json
+namespace: openai_management
+requestTimeout: 60s
+
+authentication:
+  securityScheme: AdminApiKeyAuth
+  credential: ${OPENAI_ADMIN_KEY}
+
+entities:
+  - name: PROJECT
+    listOperation: list-projects
+    responsePath: /data
+    primaryKey:
+      - id
+    queryParameters:
+      - name: include_archived
+        value: ${OPENAI_INCLUDE_ARCHIVED_PROJECTS:-true}
+    pagination:
+      mode: CURSOR
+      pageSize: 100
+      pageSizeParameter: limit
+      cursorParameter: after
+      nextCursorPath: /last_id
+      hasMorePath: /has_more
+
+  - name: ORGANIZATION_USER
+    listOperation: list-users
+    responsePath: /data
+    primaryKey:
+      - id
+    pagination:
+      mode: CURSOR
+      pageSize: 100
+      pageSizeParameter: limit
+      cursorParameter: after
+      nextCursorPath: /last_id
+      hasMorePath: /has_more
+
+  - name: ADMIN_API_KEY
+    listOperation: admin-api-keys-list
+    responsePath: /data
+    primaryKey:
+      - id
+    pagination:
+      mode: CURSOR
+      pageSize: 100
+      pageSizeParameter: limit
+      cursorParameter: after
+      nextCursorPath: /last_id
+      hasMorePath: /has_more
+
+  - name: AUDIT_LOG
+    listOperation: list-audit-logs
+    responsePath: /data
+    primaryKey:
+      - id
+    pagination:
+      mode: CURSOR
+      pageSize: 100
+      pageSizeParameter: limit
+      cursorParameter: after
+      nextCursorPath: /last_id
+      hasMorePath: /has_more
+
+  - name: COMPLETIONS_USAGE_BUCKET
+    listOperation: usage-completions
+    responsePath: /data
+    primaryKey:
+      - start_time
+    queryParameters:
+      - name: start_time
+        value: ${OPENAI_USAGE_START_TIME}
+      - name: bucket_width
+        value: ${OPENAI_USAGE_BUCKET_WIDTH:-1d}
+    pagination:
+      mode: CURSOR
+      pageSize: 31
+      pageSizeParameter: limit
+      cursorParameter: page
+      nextCursorPath: /next_page
+      hasMorePath: /has_more
+
+  - name: COST_BUCKET
+    listOperation: usage-costs
+    responsePath: /data
+    primaryKey:
+      - start_time
+    queryParameters:
+      - name: start_time
+        value: ${OPENAI_USAGE_START_TIME}
+      - name: bucket_width
+        value: 1d
+    pagination:
+      mode: CURSOR
+      pageSize: 180
+      pageSizeParameter: limit
+      cursorParameter: page
+      nextCursorPath: /next_page
+      hasMorePath: /has_more

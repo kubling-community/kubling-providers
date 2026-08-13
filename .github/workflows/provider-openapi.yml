@@ -1,0 +1,97 @@
+name: OpenAPI Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/openapi/v*'
+    paths:
+      - 'providers/openapi/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-openapi.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/openapi/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-openapi.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  release-preflight:
+    name: Verify release prerequisites
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Verify released Go SDK dependency
+        if: startsWith(github.ref, 'refs/tags/providers/openapi/v')
+        shell: bash
+        run: |
+          sdk_module='github.com/kubling-community/kubling-providers/sdk-go'
+          sdk_version="$(awk -v module="${sdk_module}" '$1 == module { print $2 }' providers/openapi/go.mod)"
+
+          if [[ ! "${sdk_version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::OpenAPI provider requires invalid SDK version ${sdk_version:-<missing>}."
+            exit 1
+          fi
+
+          if ! git ls-remote --exit-code --tags origin "refs/tags/sdk-go/${sdk_version}" >/dev/null 2>&1; then
+            echo "::error::Required SDK release sdk-go/${sdk_version} does not exist."
+            exit 1
+          fi
+
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: OpenAPI provider
+      module_directory: providers/openapi
+
+  container:
+    needs:
+      - release-preflight
+      - validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: openapi
+      provider_directory: providers/openapi
+      image_repository: docker.io/kubling/openapi-provider
+      image_title: Kubling OpenAPI Provider
+      image_description: Configurable OpenAPI provider for Kubling
+    secrets: inherit
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/openapi/v')
+    needs:
+      - validate
+      - container
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "OpenAPI Provider ${{ needs.container.outputs.version }}"

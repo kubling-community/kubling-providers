@@ -60,6 +60,10 @@ Release. Stable versions publish `MAJOR.MINOR.PATCH`, `MAJOR.MINOR` and
 repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` before creating
 the first provider tag.
 
+Publish the SDK version referenced by a provider's `go.mod` before creating the
+provider tag. Release workflows may reject a provider whose SDK dependency has
+no corresponding `sdk-go/v*` tag.
+
 Provider-specific configuration and local environments are documented in each
 provider directory.
 

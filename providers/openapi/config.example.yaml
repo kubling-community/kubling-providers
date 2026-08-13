@@ -1,0 +1,18 @@
+# The minimum deployment needs only an OpenAPI document, its API base URL and
+# discovery. Environment placeholders are expanded before YAML is decoded.
+specFile: ${OPENAPI_SPEC_URL}
+namespace: ${OPENAPI_NAMESPACE:-api}
+requestTimeout: ${OPENAPI_REQUEST_TIMEOUT:-30s}
+maxResponseBytes: ${OPENAPI_MAX_RESPONSE_BYTES:-33554432}
+# Set only for trusted development endpoints that require credentials over HTTP.
+allowInsecureHttp: false
+
+# baseUrl is optional when the first OpenAPI servers entry is an absolute URL.
+baseUrl: ${OPENAPI_BASE_URL:-}
+
+discovery:
+  enabled: true
+
+# Add explicit entities only for operations that need overrides such as a
+# primary key, pagination, fixed parameters or a less mechanical table name.
+entities: []

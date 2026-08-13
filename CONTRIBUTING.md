@@ -74,6 +74,8 @@ Before opening a pull request, verify that:
 - metadata correctly marks namespaces, keys, nullability, defaults and
   mutability;
 - query and mutation inputs are parameterized rather than concatenated;
+- redirects cannot move credentials or static headers to another origin;
+- remote documents and datasource responses have explicit size limits;
 - cancellation and connection closure release all source resources;
 - source nulls remain null instead of becoming zero values or the string
   `"null"`;

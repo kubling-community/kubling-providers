@@ -1,0 +1,17 @@
+name: kubling-openapi-local
+
+services:
+  provider:
+    image: ${OPENAPI_PROVIDER_IMAGE:-kubling/openapi-provider:local}
+    build:
+      context: ../../..
+      dockerfile: providers/openapi/Dockerfile
+    environment:
+      OPENAI_ADMIN_KEY: ${OPENAI_ADMIN_KEY:-}
+      OPENAI_USAGE_START_TIME: ${OPENAI_USAGE_START_TIME:-}
+      OPENAI_USAGE_BUCKET_WIDTH: ${OPENAI_USAGE_BUCKET_WIDTH:-1d}
+      OPENAI_INCLUDE_ARCHIVED_PROJECTS: ${OPENAI_INCLUDE_ARCHIVED_PROJECTS:-true}
+    ports:
+      - "127.0.0.1:${KUBLING_OPENAPI_PROVIDER_PORT:-50055}:50051"
+    volumes:
+      - ../examples/openai-management.yaml:/etc/kubling/provider.yaml:ro
