@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/apache/cassandra-gocql-driver/v2 v2.1.2
 	github.com/kubling-community/kubling-grpc/sdk-go v0.1.1
-	github.com/kubling-community/kubling-providers/sdk-go v0.1.0
+	github.com/kubling-community/kubling-providers/sdk-go v0.1.1
 	google.golang.org/grpc v1.82.1
 	gopkg.in/inf.v0 v0.9.1
 	gopkg.in/yaml.v3 v3.0.1
