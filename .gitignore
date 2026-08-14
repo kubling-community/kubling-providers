@@ -33,4 +33,5 @@ Thumbs.db
 *.log
 
 # Generated local integration bundles
+/testing/provider-test
 /testing/kubling/provider-test-descriptor-bundle.zip
