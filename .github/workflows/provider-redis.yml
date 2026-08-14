@@ -9,7 +9,6 @@ on:
       - 'providers/redis/v*'
     paths:
       - 'providers/redis/**'
-      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-redis.yml'
@@ -19,7 +18,6 @@ on:
       - master
     paths:
       - 'providers/redis/**'
-      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-redis.yml'
