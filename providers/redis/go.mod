@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/kubling-community/kubling-grpc/sdk-go v0.1.1
 	github.com/kubling-community/kubling-providers/sdk-go v0.1.0
-	github.com/redis/go-redis/v9 v9.21.0
+	github.com/redis/go-redis/v9 v9.22.0
 	google.golang.org/grpc v1.67.0
 	google.golang.org/protobuf v1.36.11
 	gopkg.in/yaml.v3 v3.0.1
