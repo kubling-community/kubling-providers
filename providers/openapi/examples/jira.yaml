@@ -1,0 +1,31 @@
+# This is one example of an API that needs an explicit entity mapping because
+# its search response contains more than one object array and uses API-specific
+# query and pagination conventions.
+specFile: https://dac-static.atlassian.com/cloud/jira/platform/swagger-v3.v3.json
+baseUrl: ${JIRA_BASE_URL}
+namespace: jira
+requestTimeout: 30s
+
+authentication:
+  securityScheme: basicAuth
+  username: ${JIRA_ACCOUNT_EMAIL}
+  password: ${JIRA_API_TOKEN}
+
+entities:
+  - name: ISSUE
+    listOperation: searchAndReconsileIssuesUsingJql
+    responsePath: /issues
+    primaryKey:
+      - id
+    queryParameters:
+      - name: jql
+        value: ${JIRA_JQL}
+      - name: fields
+        value: id,key,summary,status,assignee,updated
+    pagination:
+      mode: CURSOR
+      pageSize: 100
+      pageSizeParameter: maxResults
+      cursorParameter: nextPageToken
+      nextCursorPath: /nextPageToken
+      maxPages: 10000
