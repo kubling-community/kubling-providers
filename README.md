@@ -9,6 +9,13 @@ engine, exposing them through a language-neutral gRPC contract. The Go SDK
 hides transport and connection lifecycle details so provider authors can work
 with regular Go interfaces.
 
+## Project status
+
+Kubling Providers is under active development and its public APIs are currently
+pre-1.0. Protocol, SDK and provider releases follow semantic versioning, but
+breaking changes may still be introduced while the contracts stabilize. Each
+release documents relevant compatibility or migration requirements.
+
 ## Repository layout
 
 - `proto/` — provider gRPC contract, published through Buf.
@@ -42,6 +49,10 @@ consumed directly by Go tooling.
 Contributions written by hand or with the help of a coding agent are welcome.
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow, review
 expectations and a practical guide to starting a new provider.
+
+Participation is governed by the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
+For help, see [`SUPPORT.md`](SUPPORT.md). Report security issues privately as
+described in [`SECURITY.md`](SECURITY.md).
 
 Provider authors can use the [testing guide](testing/README.md) to validate the
 gRPC implementation directly and through a real Kubling VDB without writing

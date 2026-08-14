@@ -1,0 +1,29 @@
+name: Provider Compatibility Tooling
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - 'testing/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/testing.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'testing/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/testing.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: Provider compatibility tooling
+      module_directory: testing
