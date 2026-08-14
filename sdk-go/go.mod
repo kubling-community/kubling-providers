@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	github.com/kubling-community/kubling-grpc/sdk-go v0.1.1
 	google.golang.org/grpc v1.67.0
-	google.golang.org/protobuf v1.36.11
+	google.golang.org/protobuf v1.36.12
 )
 
 require (
