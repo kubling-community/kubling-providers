@@ -14,5 +14,6 @@ discovery:
   enabled: true
 
 # Add explicit entities only for operations that need overrides such as a
-# primary key, pagination, fixed parameters or a less mechanical table name.
+# primary or stable key, pagination, fixed parameters or a less mechanical
+# table name. Stable keys are never inferred from the OpenAPI document.
 entities: []

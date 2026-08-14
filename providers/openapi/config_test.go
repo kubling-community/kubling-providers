@@ -86,6 +86,33 @@ entities:
 	}
 }
 
+func TestLoadConfigReadsStableKey(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "provider.yaml")
+	writeTestFile(t, configPath, `
+specFile: api.yaml
+baseUrl: https://billing.example.test/api
+entities:
+  - name: INVOICE
+    listOperation: listInvoices
+    stableKey:
+      columns:
+        - tenant_id
+        - id
+`)
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	stableKey := config.Entities[0].StableKey
+	if stableKey == nil || stableKey.Name != "identifier" {
+		t.Fatalf("LoadConfig() stableKey = %#v", stableKey)
+	}
+	if len(stableKey.Columns) != 2 || stableKey.Columns[0] != "tenant_id" || stableKey.Columns[1] != "id" {
+		t.Fatalf("LoadConfig() stableKey columns = %v", stableKey.Columns)
+	}
+}
+
 func TestNormalizeConfigDefaultsAndValidatesMaxResponseBytes(t *testing.T) {
 	config := Config{
 		SpecFile:  "api.yaml",
@@ -293,6 +320,25 @@ func TestNormalizeConfigRejectsInvalidEntityMappings(t *testing.T) {
 			name:     "duplicate key",
 			entities: []EntityConfig{{Name: "INVOICE", ListOperation: "listInvoices", PrimaryKey: []string{"id", "id"}}},
 			want:     `duplicate primaryKey field "id"`,
+		},
+		{
+			name: "primary and stable key",
+			entities: []EntityConfig{{
+				Name:          "INVOICE",
+				ListOperation: "listInvoices",
+				PrimaryKey:    []string{"id"},
+				StableKey:     &StableKeyConfig{Columns: []string{"tenant_id", "id"}},
+			}},
+			want: "primaryKey and stableKey cannot both be configured",
+		},
+		{
+			name: "empty stable key",
+			entities: []EntityConfig{{
+				Name:          "INVOICE",
+				ListOperation: "listInvoices",
+				StableKey:     &StableKeyConfig{},
+			}},
+			want: "stableKey: at least one component column is required",
 		},
 		{
 			name: "invalid pagination",

@@ -9,6 +9,7 @@ import (
 
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -236,12 +237,12 @@ func resourceTableMetadataWithOptions(
 	}
 
 	columns := resourceColumnsWithOptions(descriptor, insertable, mutable, includeObject)
-	primaryColumns := []string{"metadata__name"}
+	identityColumns := []string{"metadata__name"}
 	if descriptor.resource.Namespaced {
-		primaryColumns = []string{"metadata__namespace", "metadata__name"}
+		identityColumns = []string{"metadata__namespace", "metadata__name"}
 	}
 
-	return &providerv1.TableMetadata{
+	table := &providerv1.TableMetadata{
 		Name:       descriptor.tableName,
 		SourceName: descriptor.resource.Name,
 		Namespace:  namespace,
@@ -252,9 +253,9 @@ func resourceTableMetadataWithOptions(
 		Columns:    columns,
 		Keys: []*providerv1.KeyMetadata{
 			{
-				Name:    "PK_" + descriptor.tableName,
-				Kind:    providerv1.KeyKind_KEY_KIND_PRIMARY,
-				Columns: primaryColumns,
+				Name:    "UK_" + descriptor.tableName + "_RESOURCE_IDENTITY",
+				Kind:    providerv1.KeyKind_KEY_KIND_UNIQUE,
+				Columns: identityColumns,
 			},
 			{
 				Name:    "UK_" + descriptor.tableName + "_UID",
@@ -263,6 +264,8 @@ func resourceTableMetadataWithOptions(
 			},
 		},
 	}
+	providersdk.MustAddStablePrimaryKey(table, "identifier", identityColumns...)
+	return table
 }
 
 func resourceColumns(descriptor *resourceDescriptor, insertable bool, mutable bool) []*providerv1.ColumnMetadata {

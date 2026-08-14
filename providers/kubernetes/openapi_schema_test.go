@@ -265,9 +265,10 @@ func TestProviderMetadataFallsBackWhenOpenAPIV3IsUnavailable(t *testing.T) {
 		t.Fatalf("Metadata() error = %v", err)
 	}
 	deployment := metadataTable(t, metadata, "DEPLOYMENT")
-	if len(deployment.GetColumns()) != 10 {
-		t.Fatalf("columns = %d, want compact 10 columns", len(deployment.GetColumns()))
+	if len(deployment.GetColumns()) != 11 {
+		t.Fatalf("columns = %d, want compact 11 columns", len(deployment.GetColumns()))
 	}
+	assertStablePrimaryKey(t, deployment, "metadata__namespace", "metadata__name")
 	if deployment.GetProperties()["kubernetes.schema_expansion"] != "" {
 		t.Fatalf("unexpected schema expansion property = %q", deployment.GetProperties()["kubernetes.schema_expansion"])
 	}

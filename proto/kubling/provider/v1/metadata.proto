@@ -115,6 +115,21 @@ message ColumnMetadata {
   //
   // Property values must not contain credentials or other secrets.
   map<string, string> properties = 14;
+
+  // Engine-generated stable key represented by this logical column.
+  //
+  // Providers declare the ordered logical source columns. Kubling owns value
+  // generation and never projects or mutates this column through the provider.
+  StableKeyMetadata stable_key = 15;
+}
+
+// Ordered source columns used by Kubling to generate a stable row key.
+message StableKeyMetadata {
+  // Logical column names in key-component order.
+  repeated string columns = 1;
+
+  // Persisted key format used to preserve compatibility across releases.
+  StableKeyFormat format = 2;
 }
 
 // Derivation of a synthetic table from a JSON column in a parent table.
@@ -232,6 +247,13 @@ enum ColumnSearchability {
   COLUMN_SEARCHABILITY_EQUALITY = 2;
   COLUMN_SEARCHABILITY_ORDERED = 3;
   COLUMN_SEARCHABILITY_ALL = 4;
+}
+
+enum StableKeyFormat {
+  STABLE_KEY_FORMAT_UNSPECIFIED = 0;
+
+  // Reversible Base62 representation with the legacy val_pk checksum suffix.
+  STABLE_KEY_FORMAT_VAL_PK_V1 = 1;
 }
 
 enum SyntheticCardinality {

@@ -95,6 +95,73 @@ func TestProviderBuildsReadOnlyMetadataFromOpenAPI(t *testing.T) {
 	}
 }
 
+func TestProviderBuildsConfiguredStableKeyMetadata(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testOpenAPISpec)
+
+	provider, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://billing.example.test/api",
+		Entities: []EntityConfig{{
+			Name:          "INVOICE",
+			ListOperation: "listInvoices",
+			ResponsePath:  "/data/items",
+			StableKey: &StableKeyConfig{
+				Name:    "global_id",
+				Columns: []string{"active", "id"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	table := metadata.Tables[0]
+	if len(table.Keys) != 1 || table.Keys[0].Kind != providerv1.KeyKind_KEY_KIND_PRIMARY || !slices.Equal(table.Keys[0].Columns, []string{"global_id"}) {
+		t.Fatalf("Metadata() keys = %#v", table.Keys)
+	}
+	globalID := table.Columns[len(table.Columns)-1]
+	if globalID.Name != "global_id" || globalID.Type != kublingv1.ValueType_VALUE_TYPE_STRING {
+		t.Fatalf("stable key column = %#v", globalID)
+	}
+	if globalID.Nullable == nil || globalID.GetNullable() || globalID.Updatable == nil || globalID.GetUpdatable() {
+		t.Fatalf("stable key column flags = nullable:%v updatable:%v", globalID.Nullable, globalID.Updatable)
+	}
+	if globalID.Searchability != providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_EQUALITY {
+		t.Fatalf("stable key searchability = %v", globalID.Searchability)
+	}
+	if globalID.Properties["val_pk"] != "active+id" {
+		t.Fatalf("stable key legacy property = %q", globalID.Properties["val_pk"])
+	}
+	stableKey := globalID.GetStableKey()
+	if stableKey == nil || !slices.Equal(stableKey.Columns, []string{"active", "id"}) || stableKey.Format != providerv1.StableKeyFormat_STABLE_KEY_FORMAT_VAL_PK_V1 {
+		t.Fatalf("stable key metadata = %#v", stableKey)
+	}
+}
+
+func TestProviderRejectsStableKeyWithUnknownComponent(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testOpenAPISpec)
+
+	_, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://billing.example.test/api",
+		Entities: []EntityConfig{{
+			Name:          "INVOICE",
+			ListOperation: "listInvoices",
+			ResponsePath:  "/data/items",
+			StableKey:     &StableKeyConfig{Columns: []string{"missing"}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), `stable primary key component column "missing" does not exist`) {
+		t.Fatalf("New() error = %v, want unknown stable key component", err)
+	}
+}
+
 func TestProviderMetadataReturnsIndependentClone(t *testing.T) {
 	specPath := filepath.Join(t.TempDir(), "api.yaml")
 	writeTestFile(t, specPath, testOpenAPISpec)
