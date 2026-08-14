@@ -55,6 +55,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Resolve release version
         id: version
@@ -87,6 +89,33 @@ jobs:
           echo "stable=${stable}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
           echo "major_minor=${major_minor}" >> "${GITHUB_OUTPUT}"
+
+      - name: Verify released Go SDK dependency
+        if: steps.version.outputs.release == 'true'
+        shell: bash
+        env:
+          PROVIDER_DIRECTORY: ${{ inputs.provider_directory }}
+        run: |
+          sdk_module='github.com/kubling-community/kubling-providers/sdk-go'
+          sdk_version="$(awk -v module="${sdk_module}" '$1 == module { print $2 }' "${PROVIDER_DIRECTORY}/go.mod")"
+
+          if [[ ! "${sdk_version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Provider requires invalid SDK version ${sdk_version:-<missing>}."
+            exit 1
+          fi
+
+          sdk_tag="sdk-go/${sdk_version}"
+          if ! git rev-parse --verify --quiet "refs/tags/${sdk_tag}^{commit}" >/dev/null; then
+            echo "::error::Required SDK release ${sdk_tag} does not exist."
+            exit 1
+          fi
+
+          if ! git diff --quiet "${sdk_tag}" -- sdk-go; then
+            echo "::error::Local sdk-go sources differ from required release ${sdk_tag}."
+            echo "::error::Release the SDK and update ${PROVIDER_DIRECTORY}/go.mod before publishing this provider."
+            git diff --stat "${sdk_tag}" -- sdk-go
+            exit 1
+          fi
 
       - name: Set up QEMU
         if: steps.version.outputs.release == 'true'

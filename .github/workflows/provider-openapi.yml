@@ -28,31 +28,6 @@ permissions:
   contents: read
 
 jobs:
-  release-preflight:
-    name: Verify release prerequisites
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Verify released Go SDK dependency
-        if: startsWith(github.ref, 'refs/tags/providers/openapi/v')
-        shell: bash
-        run: |
-          sdk_module='github.com/kubling-community/kubling-providers/sdk-go'
-          sdk_version="$(awk -v module="${sdk_module}" '$1 == module { print $2 }' providers/openapi/go.mod)"
-
-          if [[ ! "${sdk_version}" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::OpenAPI provider requires invalid SDK version ${sdk_version:-<missing>}."
-            exit 1
-          fi
-
-          if ! git ls-remote --exit-code --tags origin "refs/tags/sdk-go/${sdk_version}" >/dev/null 2>&1; then
-            echo "::error::Required SDK release sdk-go/${sdk_version} does not exist."
-            exit 1
-          fi
-
   validate:
     uses: ./.github/workflows/_go-module.yml
     with:
@@ -60,9 +35,7 @@ jobs:
       module_directory: providers/openapi
 
   container:
-    needs:
-      - release-preflight
-      - validate
+    needs: validate
     uses: ./.github/workflows/_provider-container.yml
     with:
       provider_name: openapi
