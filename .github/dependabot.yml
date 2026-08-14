@@ -1,14 +1,13 @@
 version: 2
+
+# Routine version updates are intentionally disabled. Dependabot alerts and
+# security updates are managed through the repository security settings.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
-    open-pull-requests-limit: 1
-    groups:
-      github-actions:
-        patterns:
-          - '*'
+    open-pull-requests-limit: 0
 
   - package-ecosystem: gomod
     directories:
@@ -21,16 +20,4 @@ updates:
       - /testing
     schedule:
       interval: monthly
-    open-pull-requests-limit: 1
-    allow:
-      - dependency-type: all
-        update-types:
-          - version-update:semver-minor
-          - version-update:semver-patch
-    groups:
-      go-dependencies:
-        patterns:
-          - '*'
-        update-types:
-          - minor
-          - patch
+    open-pull-requests-limit: 0
