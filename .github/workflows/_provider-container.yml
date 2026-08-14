@@ -67,7 +67,6 @@ jobs:
           release=false
           stable=false
           version=dev
-          major_minor=
 
           if [[ "${GITHUB_REF}" == "refs/tags/providers/${PROVIDER_NAME}/v"* ]]; then
             tagged_version="${GITHUB_REF_NAME#providers/${PROVIDER_NAME}/}"
@@ -76,9 +75,7 @@ jobs:
               exit 1
             fi
 
-            version="${tagged_version#v}"
-            core_version="${version%%-*}"
-            major_minor="${core_version%.*}"
+            version="${tagged_version}"
             release=true
             if [[ "${version}" != *-* ]]; then
               stable=true
@@ -88,7 +85,6 @@ jobs:
           echo "release=${release}" >> "${GITHUB_OUTPUT}"
           echo "stable=${stable}" >> "${GITHUB_OUTPUT}"
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
-          echo "major_minor=${major_minor}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify released Go SDK dependency
         if: steps.version.outputs.release == 'true'
@@ -139,7 +135,6 @@ jobs:
           tags: |
             type=sha,prefix=sha-
             type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.version.outputs.release == 'true' }}
-            type=raw,value=${{ steps.version.outputs.major_minor }},enable=${{ steps.version.outputs.stable == 'true' }}
             type=raw,value=latest,enable=${{ steps.version.outputs.stable == 'true' }}
           labels: |
             org.opencontainers.image.title=${{ inputs.image_title }}

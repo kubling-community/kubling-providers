@@ -70,7 +70,7 @@ listens on port `50051` and reads `/etc/kubling/provider.yaml` by default:
 docker run --rm \
   --publish 50051:50051 \
   --volume "$PWD/config.example.yaml:/etc/kubling/provider.yaml:ro" \
-  docker.io/kubling/cassandra-provider:0.1.0
+  docker.io/kubling/cassandra-provider:v0.1.0
 ```
 
 The mounted configuration must use Cassandra hostnames reachable from inside
@@ -79,9 +79,9 @@ the container. Override the configuration path with
 the image name.
 
 Release tags use `providers/cassandra/vMAJOR.MINOR.PATCH`. Stable releases
-publish the exact version, the moving `MAJOR.MINOR` tag and `latest` for
-`linux/amd64` and `linux/arm64`. Prereleases publish only their exact version;
-every release also publishes an immutable `sha-*` tag.
+publish the exact `vMAJOR.MINOR.PATCH` tag and `latest` for `linux/amd64` and
+`linux/arm64`. Prereleases publish only their exact version; every release also
+publishes an immutable `sha-*` tag.
 
 ## Local environment
 
