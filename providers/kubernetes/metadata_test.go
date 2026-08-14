@@ -82,9 +82,7 @@ func TestBuildMetadataCreatesDeterministicResourceCatalog(t *testing.T) {
 		pod.GetProperties()["kubernetes.categories"] != "all" {
 		t.Fatalf("POD properties = %v", pod.GetProperties())
 	}
-	if got := pod.GetKeys()[0].GetColumns(); len(got) != 2 || got[0] != "metadata__namespace" || got[1] != "metadata__name" {
-		t.Fatalf("POD primary key = %v", got)
-	}
+	assertStablePrimaryKey(t, pod, "metadata__namespace", "metadata__name")
 	assertJSONColumns(t, pod, "metadata", "spec", "status", "object")
 
 	deployment := metadataTable(t, metadata, "DEPLOYMENT")
@@ -98,9 +96,7 @@ func TestBuildMetadataCreatesDeterministicResourceCatalog(t *testing.T) {
 	}
 
 	node := metadataTable(t, metadata, "NODE")
-	if got := node.GetKeys()[0].GetColumns(); len(got) != 1 || got[0] != "metadata__name" {
-		t.Fatalf("NODE primary key = %v", got)
-	}
+	assertStablePrimaryKey(t, node, "metadata__name")
 	if !metadataColumn(t, node, "metadata__namespace").GetNullable() {
 		t.Fatal("cluster-scoped namespace column nullable = false")
 	}
@@ -349,6 +345,53 @@ func metadataColumn(t *testing.T, table *providerv1.TableMetadata, name string) 
 	}
 	t.Fatalf("column %q not found in %q", name, table.GetName())
 	return nil
+}
+
+func assertStablePrimaryKey(
+	t *testing.T,
+	table *providerv1.TableMetadata,
+	components ...string,
+) {
+	t.Helper()
+	identifier := metadataColumn(t, table, "identifier")
+	stableKey := identifier.GetStableKey()
+	if stableKey == nil {
+		t.Fatalf("%s identifier stable key is nil", table.GetName())
+	}
+	if stableKey.GetFormat() != providerv1.StableKeyFormat_STABLE_KEY_FORMAT_VAL_PK_V1 {
+		t.Fatalf("%s stable key format = %v", table.GetName(), stableKey.GetFormat())
+	}
+	if got := stableKey.GetColumns(); len(got) != len(components) {
+		t.Fatalf("%s stable key columns = %v, want %v", table.GetName(), got, components)
+	} else {
+		for index := range components {
+			if got[index] != components[index] {
+				t.Fatalf("%s stable key columns = %v, want %v", table.GetName(), got, components)
+			}
+		}
+	}
+	if len(table.GetKeys()) < 2 {
+		t.Fatalf("%s keys = %v, want generated primary and source unique keys", table.GetName(), table.GetKeys())
+	}
+	primary := table.GetKeys()[0]
+	if primary.GetKind() != providerv1.KeyKind_KEY_KIND_PRIMARY ||
+		len(primary.GetColumns()) != 1 ||
+		primary.GetColumns()[0] != "identifier" {
+		t.Fatalf("%s primary key = %v", table.GetName(), primary)
+	}
+	sourceIdentity := table.GetKeys()[1]
+	if sourceIdentity.GetKind() != providerv1.KeyKind_KEY_KIND_UNIQUE {
+		t.Fatalf("%s source identity key = %v", table.GetName(), sourceIdentity)
+	}
+	if got := sourceIdentity.GetColumns(); len(got) != len(components) {
+		t.Fatalf("%s source identity columns = %v, want %v", table.GetName(), got, components)
+	} else {
+		for index := range components {
+			if got[index] != components[index] {
+				t.Fatalf("%s source identity columns = %v, want %v", table.GetName(), got, components)
+			}
+		}
+	}
 }
 
 func assertJSONColumns(t *testing.T, table *providerv1.TableMetadata, names ...string) {

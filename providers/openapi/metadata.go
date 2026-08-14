@@ -11,6 +11,7 @@ import (
 
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"github.com/pb33f/libopenapi/datamodel/high/base"
 	v3 "github.com/pb33f/libopenapi/datamodel/high/v3"
 )
@@ -777,7 +778,7 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 			tableProperties["openapi."+name+".path"] = mutation.path
 		}
 	}
-	return &providerv1.TableMetadata{
+	table := &providerv1.TableMetadata{
 		Name:       descriptor.config.Name,
 		SourceName: descriptor.operation.OperationId,
 		Kind:       providerv1.TableKind_TABLE_KIND_TABLE,
@@ -787,7 +788,13 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 		Annotation: annotation,
 		Namespace:  namespace,
 		Properties: tableProperties,
-	}, nil
+	}
+	if stableKey := descriptor.config.StableKey; stableKey != nil {
+		if err := providersdk.AddStablePrimaryKey(table, stableKey.Name, stableKey.Columns...); err != nil {
+			return nil, fmt.Errorf("stableKey: %w", err)
+		}
+	}
+	return table, nil
 }
 
 func applyMutationMetadata(

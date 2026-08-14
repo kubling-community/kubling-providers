@@ -143,6 +143,23 @@ objects.
 `primaryKey` is optional. Every listed field must exist in the discovered row
 schema. The provider marks key fields as non-nullable in the returned metadata.
 
+An explicit entity may instead define an engine-generated stable key composed
+from ordered response fields:
+
+```yaml
+stableKey:
+  name: global_id
+  columns:
+    - tenant_id
+    - id
+```
+
+`name` defaults to `identifier`. The generated column becomes the table primary
+key and is never projected to or mutated through the API. Kubling generates its
+value and unfolds supported predicates back to the component fields.
+`primaryKey` and `stableKey` are mutually exclusive. Every component must exist
+in the response row schema.
+
 The configuration may contain static request headers. Do not commit secrets in
 example files; mount or generate the real provider configuration through the
 deployment's secret-management mechanism.
@@ -255,11 +272,11 @@ entities:
       nextCursorPath: /data/next
 ```
 
-Discovery deliberately does not guess authentication semantics, primary keys,
-filter equivalence, pagination conventions or write semantics. Operations with
-multiple object arrays, required parameters or special request semantics remain explicit. An
-`includeOperations` entry that cannot be safely discovered fails startup with
-the reason instead of being silently ignored.
+Discovery deliberately does not guess authentication semantics, primary or
+stable keys, filter equivalence, pagination conventions or write semantics.
+Operations with multiple object arrays, required parameters or special request
+semantics remain explicit. An `includeOperations` entry that cannot be safely
+discovered fails startup with the reason instead of being silently ignored.
 
 ## Configuration template generation
 

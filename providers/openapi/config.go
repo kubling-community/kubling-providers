@@ -54,10 +54,16 @@ type EntityConfig struct {
 	ListOperation   string
 	ResponsePath    string
 	PrimaryKey      []string
+	StableKey       *StableKeyConfig
 	QueryParameters []QueryParameterConfig
 	EqualityFilters []EqualityFilterConfig
 	Pagination      *PaginationConfig
 	Mutations       *EntityMutationConfig
+}
+
+type StableKeyConfig struct {
+	Name    string
+	Columns []string
 }
 
 type EntityMutationConfig struct {
@@ -143,10 +149,16 @@ type fileEntityConfig struct {
 	ListOperation   string                     `yaml:"listOperation"`
 	ResponsePath    string                     `yaml:"responsePath"`
 	PrimaryKey      []string                   `yaml:"primaryKey"`
+	StableKey       *fileStableKeyConfig       `yaml:"stableKey"`
 	QueryParameters []fileQueryParameterConfig `yaml:"queryParameters"`
 	EqualityFilters []fileEqualityFilterConfig `yaml:"equalityFilters"`
 	Pagination      *filePaginationConfig      `yaml:"pagination"`
 	Mutations       *fileEntityMutationConfig  `yaml:"mutations"`
+}
+
+type fileStableKeyConfig struct {
+	Name    string   `yaml:"name"`
+	Columns []string `yaml:"columns"`
 }
 
 type fileEntityMutationConfig struct {
@@ -233,6 +245,7 @@ func loadConfig(path string, requireEntities bool) (Config, error) {
 			ListOperation:   entity.ListOperation,
 			ResponsePath:    entity.ResponsePath,
 			PrimaryKey:      append([]string(nil), entity.PrimaryKey...),
+			StableKey:       entity.StableKey.toConfig(),
 			QueryParameters: entity.queryParameters(),
 			EqualityFilters: entity.equalityFilters(),
 			Pagination:      entity.Pagination.toConfig(),
@@ -590,6 +603,7 @@ func normalizeEntity(entity EntityConfig) (EntityConfig, error) {
 		ListOperation:   strings.TrimSpace(entity.ListOperation),
 		ResponsePath:    strings.TrimSpace(entity.ResponsePath),
 		PrimaryKey:      make([]string, 0, len(entity.PrimaryKey)),
+		StableKey:       nil,
 		QueryParameters: make([]QueryParameterConfig, 0, len(entity.QueryParameters)),
 		EqualityFilters: make([]EqualityFilterConfig, 0, len(entity.EqualityFilters)),
 		Mutations:       &EntityMutationConfig{},
@@ -619,6 +633,14 @@ func normalizeEntity(entity EntityConfig) (EntityConfig, error) {
 		keys[key] = struct{}{}
 		normalized.PrimaryKey = append(normalized.PrimaryKey, key)
 	}
+	stableKey, err := normalizeStableKey(entity.StableKey)
+	if err != nil {
+		return EntityConfig{}, fmt.Errorf("stableKey: %w", err)
+	}
+	if stableKey != nil && len(normalized.PrimaryKey) > 0 {
+		return EntityConfig{}, errors.New("primaryKey and stableKey cannot both be configured")
+	}
+	normalized.StableKey = stableKey
 	queryParameters := make(map[string]struct{}, len(entity.QueryParameters))
 	for index, candidate := range entity.QueryParameters {
 		parameter := QueryParameterConfig{
@@ -685,6 +707,49 @@ func normalizeEntity(entity EntityConfig) (EntityConfig, error) {
 	}
 	normalized.Mutations = mutations
 
+	return normalized, nil
+}
+
+func (stableKey *fileStableKeyConfig) toConfig() *StableKeyConfig {
+	if stableKey == nil {
+		return nil
+	}
+	return &StableKeyConfig{
+		Name:    stableKey.Name,
+		Columns: append([]string(nil), stableKey.Columns...),
+	}
+}
+
+func normalizeStableKey(stableKey *StableKeyConfig) (*StableKeyConfig, error) {
+	if stableKey == nil {
+		return nil, nil
+	}
+	normalized := &StableKeyConfig{
+		Name:    strings.TrimSpace(stableKey.Name),
+		Columns: make([]string, 0, len(stableKey.Columns)),
+	}
+	if normalized.Name == "" {
+		normalized.Name = "identifier"
+	}
+	seen := make(map[string]struct{}, len(stableKey.Columns))
+	for index, rawColumn := range stableKey.Columns {
+		column := strings.TrimSpace(rawColumn)
+		if column == "" {
+			return nil, fmt.Errorf("columns %d must not be blank", index)
+		}
+		lookup := strings.ToUpper(column)
+		if strings.EqualFold(normalized.Name, column) {
+			return nil, fmt.Errorf("generated column %q cannot also be a component", normalized.Name)
+		}
+		if _, exists := seen[lookup]; exists {
+			return nil, fmt.Errorf("duplicate component column %q", column)
+		}
+		seen[lookup] = struct{}{}
+		normalized.Columns = append(normalized.Columns, column)
+	}
+	if len(normalized.Columns) == 0 {
+		return nil, errors.New("at least one component column is required")
+	}
 	return normalized, nil
 }
 
