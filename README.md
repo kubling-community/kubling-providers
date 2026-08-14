@@ -55,10 +55,10 @@ DDL.
 
 A provider tag validates its Go module, builds `linux/amd64` and `linux/arm64`
 images, pushes `docker.io/kubling/<provider>-provider`, and creates a GitHub
-Release. Stable versions publish `MAJOR.MINOR.PATCH`, `MAJOR.MINOR` and
-`latest`; prereleases publish only their exact version. Configure the
-repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` before creating
-the first provider tag.
+Release. Every release publishes its exact immutable `vMAJOR.MINOR.PATCH` tag
+and a `sha-*` tag. Stable versions also publish `latest`; prereleases do not.
+Configure the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
+before creating the first provider tag.
 
 Publish the SDK version referenced by a provider's `go.mod` before creating the
 provider tag. Release workflows may reject a provider whose SDK dependency has
