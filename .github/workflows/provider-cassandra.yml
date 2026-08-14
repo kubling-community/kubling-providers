@@ -9,7 +9,6 @@ on:
       - 'providers/cassandra/v*'
     paths:
       - 'providers/cassandra/**'
-      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-cassandra.yml'
@@ -19,7 +18,6 @@ on:
       - master
     paths:
       - 'providers/cassandra/**'
-      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-cassandra.yml'
