@@ -20,6 +20,12 @@ index searchability and Cassandra-specific properties. Kubling always asks for
 the complete catalog and may filter it locally; cluster and keyspace selection
 remain private provider configuration.
 
+The optional top-level `namespaceColumn` setting exposes each configured source
+namespace as a generated constant column. This gives federated queries an
+explicit source identity without sending that column to Cassandra. Each table
+uses its own namespace value, while its native Cassandra primary key remains
+unchanged.
+
 Queries are translated to parameterized CQL and streamed back in incremental
 batches. The provider handles projections, limits, ordering, `AND`, and the
 comparison operators `=`, `<`, `<=`, `>` and `>=`. It does not advertise
@@ -70,7 +76,7 @@ listens on port `50051` and reads `/etc/kubling/provider.yaml` by default:
 docker run --rm \
   --publish 50051:50051 \
   --volume "$PWD/config.example.yaml:/etc/kubling/provider.yaml:ro" \
-  docker.io/kubling/cassandra-provider:v0.1.0
+  docker.io/kubling/cassandra-provider:latest
 ```
 
 The mounted configuration must use Cassandra hostnames reachable from inside

@@ -1,3 +1,6 @@
+namespaceColumn:
+  enabled: true
+
 namespaces:
   sample:
     hosts:

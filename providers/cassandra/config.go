@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/apache/cassandra-gocql-driver/v2"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"gopkg.in/yaml.v3"
 )
 
@@ -24,7 +25,15 @@ const (
 // Config defines the logical namespaces and Cassandra connection settings
 // owned by this provider process.
 type Config struct {
-	DataSources map[string]DataSourceConfig
+	DataSources     map[string]DataSourceConfig
+	NamespaceColumn NamespaceColumnConfig
+}
+
+// NamespaceColumnConfig controls whether source namespaces are exposed as a
+// relational val_constant column.
+type NamespaceColumnConfig struct {
+	Enabled bool
+	Name    string
 }
 
 // DataSourceConfig configures one Cassandra keyspace.
@@ -52,7 +61,13 @@ type TLSConfig struct {
 }
 
 type fileConfig struct {
-	Namespaces map[string]fileDataSourceConfig `yaml:"namespaces"`
+	NamespaceColumn fileNamespaceColumnConfig       `yaml:"namespaceColumn"`
+	Namespaces      map[string]fileDataSourceConfig `yaml:"namespaces"`
+}
+
+type fileNamespaceColumnConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	Name    string `yaml:"name"`
 }
 
 type fileDataSourceConfig struct {
@@ -103,6 +118,10 @@ func LoadConfig(path string) (Config, error) {
 
 	config := Config{
 		DataSources: make(map[string]DataSourceConfig, len(serialized.Namespaces)),
+		NamespaceColumn: NamespaceColumnConfig{
+			Enabled: serialized.NamespaceColumn.Enabled,
+			Name:    serialized.NamespaceColumn.Name,
+		},
 	}
 	for namespace, serializedDataSource := range serialized.Namespaces {
 		dataSource, err := serializedDataSource.toConfig()
@@ -171,6 +190,12 @@ func normalizeConfig(config Config) (Config, error) {
 	normalized := Config{
 		DataSources: make(map[string]DataSourceConfig, len(config.DataSources)),
 	}
+	namespaceColumn, err := normalizeNamespaceColumnConfig(config.NamespaceColumn)
+	if err != nil {
+		return Config{}, fmt.Errorf("namespaceColumn: %w", err)
+	}
+	normalized.NamespaceColumn = namespaceColumn
+
 	for dataSourceRef, dataSource := range config.DataSources {
 		if dataSourceRef == "" || strings.TrimSpace(dataSourceRef) != dataSourceRef {
 			return Config{}, fmt.Errorf("invalid namespace %q", dataSourceRef)
@@ -183,6 +208,24 @@ func normalizeConfig(config Config) (Config, error) {
 		normalized.DataSources[dataSourceRef] = normalizedDataSource
 	}
 
+	return normalized, nil
+}
+
+func normalizeNamespaceColumnConfig(config NamespaceColumnConfig) (NamespaceColumnConfig, error) {
+	normalized := config
+	normalized.Name = strings.TrimSpace(config.Name)
+	if !normalized.Enabled {
+		if normalized.Name != "" {
+			return NamespaceColumnConfig{}, errors.New("enabled must be true when a namespace column name is configured")
+		}
+		return NamespaceColumnConfig{}, nil
+	}
+	if normalized.Name == "" {
+		normalized.Name = providersdk.DefaultNamespaceColumnName
+	}
+	if strings.Contains(normalized.Name, "+") {
+		return NamespaceColumnConfig{}, errors.New("name must not contain reserved separator +")
+	}
 	return normalized, nil
 }
 

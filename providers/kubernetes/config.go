@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sschema "k8s.io/apimachinery/pkg/runtime/schema"
@@ -32,6 +33,8 @@ const (
 
 // Config configures the single Kubernetes cluster owned by this provider.
 type Config struct {
+	Namespace              string
+	NamespaceColumn        NamespaceColumnConfig
 	Kubeconfig             string
 	Context                string
 	InCluster              bool
@@ -40,6 +43,14 @@ type Config struct {
 	Burst                  int
 	BlankNamespaceStrategy BlankNamespaceStrategy
 	Schema                 SchemaConfig
+}
+
+// NamespaceColumnConfig controls whether the provider namespace is exposed as
+// a relational val_constant column.
+type NamespaceColumnConfig struct {
+	Enabled             bool
+	Name                string
+	IncludeInStableKeys bool
 }
 
 // SchemaConfig controls which Kubernetes resources are exposed and how deeply
@@ -59,14 +70,22 @@ type ResourceSchemaConfig struct {
 }
 
 type fileConfig struct {
-	Kubeconfig             string           `yaml:"kubeconfig"`
-	Context                string           `yaml:"context"`
-	InCluster              bool             `yaml:"inCluster"`
-	RequestTimeout         string           `yaml:"requestTimeout"`
-	QPS                    float32          `yaml:"qps"`
-	Burst                  int              `yaml:"burst"`
-	BlankNamespaceStrategy string           `yaml:"blankNamespaceStrategy"`
-	Schema                 fileSchemaConfig `yaml:"schema"`
+	Namespace              string                    `yaml:"namespace"`
+	NamespaceColumn        fileNamespaceColumnConfig `yaml:"namespaceColumn"`
+	Kubeconfig             string                    `yaml:"kubeconfig"`
+	Context                string                    `yaml:"context"`
+	InCluster              bool                      `yaml:"inCluster"`
+	RequestTimeout         string                    `yaml:"requestTimeout"`
+	QPS                    float32                   `yaml:"qps"`
+	Burst                  int                       `yaml:"burst"`
+	BlankNamespaceStrategy string                    `yaml:"blankNamespaceStrategy"`
+	Schema                 fileSchemaConfig          `yaml:"schema"`
+}
+
+type fileNamespaceColumnConfig struct {
+	Enabled             bool   `yaml:"enabled"`
+	Name                string `yaml:"name"`
+	IncludeInStableKeys bool   `yaml:"includeInStableKeys"`
 }
 
 type fileSchemaConfig struct {
@@ -111,6 +130,8 @@ func LoadConfig(configPath string) (Config, error) {
 	}
 
 	return normalizeConfig(Config{
+		Namespace:              serialized.Namespace,
+		NamespaceColumn:        serialized.NamespaceColumn.toConfig(),
 		Kubeconfig:             serialized.Kubeconfig,
 		Context:                serialized.Context,
 		InCluster:              serialized.InCluster,
@@ -120,6 +141,14 @@ func LoadConfig(configPath string) (Config, error) {
 		BlankNamespaceStrategy: BlankNamespaceStrategy(serialized.BlankNamespaceStrategy),
 		Schema:                 serialized.Schema.toConfig(),
 	})
+}
+
+func (c fileNamespaceColumnConfig) toConfig() NamespaceColumnConfig {
+	return NamespaceColumnConfig{
+		Enabled:             c.Enabled,
+		Name:                c.Name,
+		IncludeInStableKeys: c.IncludeInStableKeys,
+	}
 }
 
 func (c fileSchemaConfig) toConfig() SchemaConfig {
@@ -151,6 +180,7 @@ func parseOptionalDuration(name string, value string) (time.Duration, error) {
 
 func normalizeConfig(config Config) (Config, error) {
 	normalized := config
+	normalized.Namespace = strings.TrimSpace(config.Namespace)
 	normalized.Kubeconfig = strings.TrimSpace(config.Kubeconfig)
 	normalized.Context = strings.TrimSpace(config.Context)
 	if normalized.InCluster && (normalized.Kubeconfig != "" || normalized.Context != "") {
@@ -170,6 +200,15 @@ func normalizeConfig(config Config) (Config, error) {
 		return Config{}, errors.New("burst must not be negative")
 	}
 
+	namespaceColumn, err := normalizeNamespaceColumnConfig(config.NamespaceColumn)
+	if err != nil {
+		return Config{}, fmt.Errorf("namespaceColumn: %w", err)
+	}
+	if namespaceColumn.Enabled && normalized.Namespace == "" {
+		return Config{}, errors.New("namespace is required when namespaceColumn is enabled")
+	}
+	normalized.NamespaceColumn = namespaceColumn
+
 	strategy := BlankNamespaceStrategy(strings.ToUpper(strings.TrimSpace(string(config.BlankNamespaceStrategy))))
 	if strategy == "" {
 		strategy = BlankNamespaceDefault
@@ -186,6 +225,24 @@ func normalizeConfig(config Config) (Config, error) {
 		return Config{}, fmt.Errorf("schema: %w", err)
 	}
 	normalized.Schema = schemaConfig
+	return normalized, nil
+}
+
+func normalizeNamespaceColumnConfig(config NamespaceColumnConfig) (NamespaceColumnConfig, error) {
+	normalized := config
+	normalized.Name = strings.TrimSpace(config.Name)
+	if !normalized.Enabled {
+		if normalized.Name != "" || normalized.IncludeInStableKeys {
+			return NamespaceColumnConfig{}, errors.New("enabled must be true when namespace column options are configured")
+		}
+		return NamespaceColumnConfig{}, nil
+	}
+	if normalized.Name == "" {
+		normalized.Name = providersdk.DefaultNamespaceColumnName
+	}
+	if strings.Contains(normalized.Name, "+") {
+		return NamespaceColumnConfig{}, errors.New("name must not contain reserved separator +")
+	}
 	return normalized, nil
 }
 

@@ -135,6 +135,10 @@ func (p *Provider) Metadata(ctx context.Context) (*providersdk.Metadata, error) 
 		p.config.Schema,
 		resolver,
 	)
+	if err := applyConfiguredNamespace(metadata, p.config); err != nil {
+		_ = p.releaseClient(entry)
+		return nil, status.Errorf(codes.FailedPrecondition, "configure Kubernetes namespace metadata: %v", err)
+	}
 	applyNamespaceInsertDefaults(metadata, p.config.BlankNamespaceStrategy, defaultNamespace)
 
 	if err := ctx.Err(); err != nil {

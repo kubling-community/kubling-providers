@@ -1,4 +1,8 @@
 kubeconfig: local/kubeconfig.local.yaml
+namespace: k3s-local
+namespaceColumn:
+  enabled: true
+  includeInStableKeys: true
 requestTimeout: 30s
 qps: 50
 burst: 100
