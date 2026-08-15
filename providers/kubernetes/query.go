@@ -145,7 +145,7 @@ func (c *Connection) resolveResource(
 	descriptors = filterResourceDescriptors(descriptors, c.provider.config.Schema)
 	assignTableNames(descriptors)
 	for _, descriptor := range descriptors {
-		if descriptor.groupVersion.String() != entity.GetNamespace() ||
+		if expectedEntityNamespace(c.provider.config, descriptor.groupVersion.String()) != entity.GetNamespace() ||
 			!strings.EqualFold(descriptor.tableName, entity.GetName()) {
 			continue
 		}
@@ -163,16 +163,24 @@ func (c *Connection) resolveResource(
 			)
 		}
 
-		return &resolvedResource{
-			descriptor: descriptor,
-			table: resourceTableMetadataWithSchema(
+		table, err := configuredTableMetadata(
+			resourceTableMetadataWithSchema(
 				descriptor,
 				resolver,
 				depth,
 				c.provider.config.Schema.includeObject(),
 			),
-			client:   client,
-			strategy: c.provider.config.BlankNamespaceStrategy,
+			c.provider.config,
+		)
+		if err != nil {
+			return nil, status.Errorf(codes.FailedPrecondition, "configure Kubernetes namespace metadata: %v", err)
+		}
+
+		return &resolvedResource{
+			descriptor: descriptor,
+			table:      table,
+			client:     client,
+			strategy:   c.provider.config.BlankNamespaceStrategy,
 			resource: client.Dynamic().Resource(
 				descriptor.groupVersion.WithResource(descriptor.resource.Name),
 			),

@@ -144,6 +144,13 @@ func (p *Provider) Metadata(
 		metadata.Namespaces = append(metadata.Namespaces, discovered.Namespaces...)
 		metadata.Tables = append(metadata.Tables, discovered.Tables...)
 	}
+	if p.config.NamespaceColumn.Enabled {
+		if err := providersdk.AddNamespaceColumns(metadata, providersdk.NamespaceColumnOptions{
+			ColumnName: p.config.NamespaceColumn.Name,
+		}); err != nil {
+			return nil, fmt.Errorf("add Cassandra namespace columns: %w", err)
+		}
+	}
 
 	return metadata, nil
 }

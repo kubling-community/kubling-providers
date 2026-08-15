@@ -34,8 +34,8 @@ func TestKubernetesIntegrationMetadataAndQuery(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Metadata() error = %v", err)
 	}
-	if integrationMetadataTable(metadata, "CONFIG_MAP", "v1") == nil {
-		t.Fatal("CONFIG_MAP table was not discovered in v1")
+	if integrationMetadataTable(metadata, "CONFIG_MAP", config.Namespace) == nil {
+		t.Fatalf("CONFIG_MAP table was not discovered in %s", config.Namespace)
 	}
 
 	opened, err := implementation.Open(ctx)
@@ -44,7 +44,7 @@ func TestKubernetesIntegrationMetadataAndQuery(t *testing.T) {
 	}
 	defer opened.Close(context.Background())
 	stream, err := opened.Query(ctx, &providerv1.QueryRequest{
-		Entity: &providerv1.EntityReference{Name: "CONFIG_MAP", Namespace: "v1"},
+		Entity: &providerv1.EntityReference{Name: "CONFIG_MAP", Namespace: config.Namespace},
 		Projections: []*providerv1.Projection{
 			fieldProjection("metadata__name", ""),
 			fieldProjection("metadata__namespace", ""),

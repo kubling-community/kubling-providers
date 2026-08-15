@@ -140,6 +140,36 @@ func TestQueryStreamsProjectedResourcesUsingDefaultNamespace(t *testing.T) {
 	}
 }
 
+func TestQueryResolvesConfiguredProviderNamespace(t *testing.T) {
+	state := &fakeDynamicState{lists: []*unstructured.UnstructuredList{{
+		Items: []unstructured.Unstructured{testPod("pod-a", "team-a", "Running")},
+	}}}
+	connection, _ := queryTestConnection(t, Config{
+		Namespace: "kubernetes-production",
+		NamespaceColumn: NamespaceColumnConfig{
+			Enabled:             true,
+			IncludeInStableKeys: true,
+		},
+	}, state, "team-a")
+
+	stream, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity: &providerv1.EntityReference{Name: "POD", Namespace: "kubernetes-production"},
+		Projections: []*providerv1.Projection{
+			fieldProjection("metadata__name", ""),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	batch, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() error = %v", err)
+	}
+	if len(batch.GetTuples()) != 1 || batch.GetTuples()[0].GetValues()[0].GetStringValue() != "pod-a" {
+		t.Fatalf("batch = %v", batch)
+	}
+}
+
 func TestQueryUsesNamespaceNameFilterAndContinuation(t *testing.T) {
 	first := &unstructured.UnstructuredList{Items: []unstructured.Unstructured{testPod("pod-a", "team-b", "Running")}}
 	first.SetContinue("next-page")

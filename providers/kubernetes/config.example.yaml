@@ -7,6 +7,20 @@
 # Use inCluster when the provider itself runs inside Kubernetes.
 # inCluster: true
 
+# Optional stable Kubling identity for this cluster. Provider instances that
+# connect to the same cluster should use the same namespace; different clusters
+# should use different values.
+namespace: kubernetes-production
+
+# Optionally expose the configured namespace as a val_constant column on every
+# discovered table. The default column name is "kubling_namespace". Including
+# it in stable keys prevents equal Kubernetes object identities from colliding
+# across clusters.
+namespaceColumn:
+  enabled: true
+  name: kubling_namespace
+  includeInStableKeys: true
+
 requestTimeout: 30s
 qps: 50
 burst: 100

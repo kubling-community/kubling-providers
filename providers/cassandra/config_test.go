@@ -28,6 +28,8 @@ func TestExampleKublingDDLIncludesEquivalentTablesAndNamespace(t *testing.T) {
 
 func TestLoadConfig(t *testing.T) {
 	path := writeTestConfig(t, `
+namespaceColumn:
+  enabled: true
 namespaces:
   analytics:
     hosts:
@@ -50,6 +52,9 @@ namespaces:
 	config, err := LoadConfig(path)
 	if err != nil {
 		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	if !config.NamespaceColumn.Enabled || config.NamespaceColumn.Name != "kubling_namespace" {
+		t.Fatalf("LoadConfig() namespace column = %#v", config.NamespaceColumn)
 	}
 
 	dataSource := config.DataSources["analytics"]
@@ -137,6 +142,17 @@ func TestNormalizeConfigRejectsInvalidDataSources(t *testing.T) {
 		"empty catalog": {},
 		"blank reference": {
 			DataSources: map[string]DataSourceConfig{" ": validTestDataSource()},
+		},
+		"namespace column name while disabled": {
+			DataSources:     map[string]DataSourceConfig{"source": validTestDataSource()},
+			NamespaceColumn: NamespaceColumnConfig{Name: "source_namespace"},
+		},
+		"namespace column reserved separator": {
+			DataSources: map[string]DataSourceConfig{"source": validTestDataSource()},
+			NamespaceColumn: NamespaceColumnConfig{
+				Enabled: true,
+				Name:    "source+namespace",
+			},
 		},
 		"missing hosts": {
 			DataSources: map[string]DataSourceConfig{

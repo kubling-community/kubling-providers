@@ -1,3 +1,7 @@
+namespaceColumn:
+  enabled: true
+  name: kubling_namespace
+
 namespaces:
   inventory:
     hosts:

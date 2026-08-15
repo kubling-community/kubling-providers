@@ -10,6 +10,10 @@ import (
 
 func TestLoadConfigNormalizesValues(t *testing.T) {
 	path := writeTestFile(t, "config.yaml", `
+namespace: kubernetes-production
+namespaceColumn:
+  enabled: true
+  includeInStableKeys: true
 context: development
 requestTimeout: 12s
 qps: 25
@@ -23,6 +27,12 @@ blankNamespaceStrategy: all
 	}
 	if config.Context != "development" {
 		t.Fatalf("Context = %q, want development", config.Context)
+	}
+	if config.Namespace != "kubernetes-production" ||
+		!config.NamespaceColumn.Enabled ||
+		config.NamespaceColumn.Name != "kubling_namespace" ||
+		!config.NamespaceColumn.IncludeInStableKeys {
+		t.Fatalf("namespace configuration = %q, %#v", config.Namespace, config.NamespaceColumn)
 	}
 	if config.RequestTimeout != 12*time.Second {
 		t.Fatalf("RequestTimeout = %v, want 12s", config.RequestTimeout)
@@ -50,13 +60,16 @@ func TestNormalizeConfigDefaults(t *testing.T) {
 
 func TestLoadConfigRejectsInvalidFiles(t *testing.T) {
 	tests := map[string]string{
-		"unknown field":       "unknown: true\n",
-		"multiple documents":  "context: first\n---\ncontext: second\n",
-		"invalid duration":    "requestTimeout: eventually\n",
-		"in cluster conflict": "inCluster: true\ncontext: local\n",
-		"negative qps":        "qps: -1\n",
-		"negative burst":      "burst: -1\n",
-		"invalid strategy":    "blankNamespaceStrategy: SOMETIMES\n",
+		"unknown field":                      "unknown: true\n",
+		"multiple documents":                 "context: first\n---\ncontext: second\n",
+		"invalid duration":                   "requestTimeout: eventually\n",
+		"in cluster conflict":                "inCluster: true\ncontext: local\n",
+		"negative qps":                       "qps: -1\n",
+		"negative burst":                     "burst: -1\n",
+		"invalid strategy":                   "blankNamespaceStrategy: SOMETIMES\n",
+		"namespace column without namespace": "namespaceColumn:\n  enabled: true\n",
+		"disabled namespace column options":  "namespaceColumn:\n  name: source_namespace\n",
+		"invalid namespace column name":      "namespace: source\nnamespaceColumn:\n  enabled: true\n  name: source+namespace\n",
 	}
 
 	for name, contents := range tests {

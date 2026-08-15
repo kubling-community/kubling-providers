@@ -8,6 +8,97 @@ import (
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 )
 
+const DefaultNamespaceColumnName = "kubling_namespace"
+
+// NamespaceColumnOptions controls how provider namespaces are exposed as
+// relational constant columns.
+type NamespaceColumnOptions struct {
+	ColumnName          string
+	IncludeInStableKeys bool
+}
+
+// AddNamespaceColumns materializes every table namespace as a val_constant
+// column. When requested, the column is prepended to every stable key declared
+// by the table.
+func AddNamespaceColumns(
+	metadata *providerv1.SchemaMetadata,
+	options NamespaceColumnOptions,
+) error {
+	if metadata == nil {
+		return fmt.Errorf("namespace column metadata is required")
+	}
+
+	columnName := strings.TrimSpace(options.ColumnName)
+	if columnName == "" {
+		columnName = DefaultNamespaceColumnName
+	}
+	if strings.Contains(columnName, "+") {
+		return fmt.Errorf("namespace column name %q contains reserved separator +", columnName)
+	}
+
+	for index, table := range metadata.GetTables() {
+		if table == nil {
+			return fmt.Errorf("namespace column table %d is required", index)
+		}
+		if strings.TrimSpace(table.GetNamespace()) == "" {
+			return fmt.Errorf("table %q namespace is required", table.GetName())
+		}
+		for _, column := range table.GetColumns() {
+			if column != nil && strings.EqualFold(strings.TrimSpace(column.GetName()), columnName) {
+				return fmt.Errorf("table %q already defines namespace column %q", table.GetName(), columnName)
+			}
+		}
+	}
+
+	for _, table := range metadata.GetTables() {
+		namespace := strings.TrimSpace(table.GetNamespace())
+		table.Namespace = namespace
+		addNamespaceColumn(table, columnName, namespace, options.IncludeInStableKeys)
+	}
+	return nil
+}
+
+func addNamespaceColumn(
+	table *providerv1.TableMetadata,
+	columnName string,
+	namespace string,
+	includeInStableKeys bool,
+) {
+	nullable := false
+	updatable := false
+	table.Columns = append(table.Columns, &providerv1.ColumnMetadata{
+		Name:          columnName,
+		Type:          kublingv1.ValueType_VALUE_TYPE_STRING,
+		Nullable:      &nullable,
+		Updatable:     &updatable,
+		Searchability: providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_ALL,
+		Annotation:    "Kubling provider namespace materialized as a constant value.",
+		Properties: map[string]string{
+			"val_constant": namespace,
+		},
+	})
+	if !includeInStableKeys {
+		return
+	}
+
+	for _, column := range table.GetColumns() {
+		if column == nil {
+			continue
+		}
+		if stableKey := column.GetStableKey(); stableKey != nil {
+			stableKey.Columns = append([]string{columnName}, stableKey.GetColumns()...)
+			if column.Properties == nil {
+				column.Properties = make(map[string]string)
+			}
+			column.Properties["val_pk"] = strings.Join(stableKey.GetColumns(), "+")
+			continue
+		}
+		if expression, exists := column.GetProperties()["val_pk"]; exists {
+			column.Properties["val_pk"] = columnName + "+" + expression
+		}
+	}
+}
+
 // AddStablePrimaryKey adds an engine-generated stable key column and makes it
 // the table primary key.
 func AddStablePrimaryKey(

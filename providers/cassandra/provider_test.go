@@ -200,6 +200,51 @@ func TestProviderMetadataAggregatesAllNamespacesDeterministically(t *testing.T) 
 	}
 }
 
+func TestProviderMetadataAddsConfiguredNamespaceColumn(t *testing.T) {
+	provider := newTestProvider(
+		t,
+		[]string{"zeta", "alpha"},
+		func(_ context.Context, config DataSourceConfig) (driverSession, error) {
+			return &testSession{metadata: &gocql.KeyspaceMetadata{
+				Name: config.Keyspace,
+				Tables: map[string]*gocql.TableMetadata{
+					"items": {
+						Name:    "items",
+						Columns: map[string]*gocql.ColumnMetadata{},
+					},
+				},
+			}}, nil
+		},
+	)
+	provider.config.NamespaceColumn = NamespaceColumnConfig{
+		Enabled: true,
+		Name:    "source_namespace",
+	}
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	if len(metadata.GetTables()) != 2 {
+		t.Fatalf("Metadata() tables = %d, want 2", len(metadata.GetTables()))
+	}
+	for index, namespace := range []string{"alpha", "zeta"} {
+		table := metadata.GetTables()[index]
+		columns := table.GetColumns()
+		if len(columns) != 1 {
+			t.Fatalf("table %q columns = %d, want 1", table.GetName(), len(columns))
+		}
+		column := columns[0]
+		if column.GetName() != "source_namespace" ||
+			column.GetProperties()["val_constant"] != namespace {
+			t.Fatalf("namespace column %d = %v", index, column)
+		}
+		if column.GetNullable() || column.GetUpdatable() {
+			t.Fatalf("namespace column %d mutability = %v", index, column)
+		}
+	}
+}
+
 func TestProviderMetadataSharesExistingSession(t *testing.T) {
 	session := &testSession{}
 	var factoryCalls atomic.Int32
