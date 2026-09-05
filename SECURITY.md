@@ -30,6 +30,6 @@ issue.
 ## Scope
 
 This policy covers the provider protocol, the Go SDK, official providers and
-their release automation in this repository. Vulnerabilities in Kubling Engine
-or other Kubling projects should be reported through the security policy of the
-affected repository.
+their release automation in this repository. Vulnerabilities in the Kubling
+runtime or other Kubling projects should be reported through the security
+policy of the affected repository.

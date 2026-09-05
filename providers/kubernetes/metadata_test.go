@@ -112,6 +112,21 @@ func TestBuildMetadataMarksPartialDiscovery(t *testing.T) {
 	}
 }
 
+func TestBuildMetadataModelsKubernetesControllerRelationships(t *testing.T) {
+	metadata := buildMetadata(kubernetesWorkloadResourceLists(), nil)
+
+	deployment := metadataTable(t, metadata, "DEPLOYMENT")
+	replicaSet := metadataTable(t, metadata, "REPLICA_SET")
+	pod := metadataTable(t, metadata, "POD")
+
+	assertOwnerReferenceColumn(t, replicaSet, "deployment__uid", "Deployment", "uid")
+	assertOwnerReferenceColumn(t, replicaSet, "deployment__name", "Deployment", "name")
+	assertOwnerReferenceColumn(t, pod, "replica_set__uid", "ReplicaSet", "uid")
+	assertOwnerReferenceColumn(t, pod, "replica_set__name", "ReplicaSet", "name")
+	assertForeignKey(t, replicaSet, "deployment__uid", deployment.GetName())
+	assertForeignKey(t, pod, "replica_set__uid", replicaSet.GetName())
+}
+
 func TestResourceTableMetadataDerivesMutationFlagsFromVerbs(t *testing.T) {
 	tests := []struct {
 		name              string
@@ -323,6 +338,64 @@ func testResourceLists() []*metav1.APIResourceList {
 			Verbs:      metav1.Verbs{"get", "list"},
 		}},
 	}}
+}
+
+func kubernetesWorkloadResourceLists() []*metav1.APIResourceList {
+	return []*metav1.APIResourceList{
+		{
+			GroupVersion: "apps/v1",
+			APIResources: []metav1.APIResource{
+				{Name: "deployments", Kind: "Deployment", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+				{Name: "replicasets", Kind: "ReplicaSet", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+			},
+		},
+		{
+			GroupVersion: "v1",
+			APIResources: []metav1.APIResource{
+				{Name: "pods", Kind: "Pod", Namespaced: true, Verbs: metav1.Verbs{"get", "list"}},
+			},
+		},
+	}
+}
+
+func assertOwnerReferenceColumn(
+	t *testing.T,
+	table *providerv1.TableMetadata,
+	name string,
+	ownerKind string,
+	field string,
+) {
+	t.Helper()
+	column := metadataColumn(t, table, name)
+	if column.GetType() != kublingv1.ValueType_VALUE_TYPE_STRING ||
+		!column.GetNullable() ||
+		column.GetUpdatable() ||
+		column.GetSearchability() != providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_UNSEARCHABLE ||
+		column.GetProperties()[ownerReferenceKindProperty] != ownerKind ||
+		column.GetProperties()[ownerReferenceFieldProperty] != field {
+		t.Fatalf("column %s.%s = %v", table.GetName(), name, column)
+	}
+}
+
+func assertForeignKey(
+	t *testing.T,
+	table *providerv1.TableMetadata,
+	column string,
+	referencedTable string,
+) {
+	t.Helper()
+	for _, key := range table.GetKeys() {
+		if key.GetKind() == providerv1.KeyKind_KEY_KIND_FOREIGN &&
+			len(key.GetColumns()) == 1 && key.GetColumns()[0] == column {
+			if key.GetReferencedTable() != referencedTable ||
+				len(key.GetReferencedColumns()) != 1 ||
+				key.GetReferencedColumns()[0] != "metadata__uid" {
+				t.Fatalf("foreign key %s.%s = %v", table.GetName(), column, key)
+			}
+			return
+		}
+	}
+	t.Fatalf("foreign key for %s.%s not found", table.GetName(), column)
 }
 
 func metadataTable(t *testing.T, metadata *providerv1.SchemaMetadata, name string) *providerv1.TableMetadata {

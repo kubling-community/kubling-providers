@@ -377,9 +377,9 @@ func (SyntheticMutationStrategy) EnumDescriptor() ([]byte, []int) {
 // Provider-neutral relational metadata exposed to Kubling.
 //
 // This structure intentionally models logical relational concepts rather than
-// Kubling core classes or native data source metadata. Provider-specific information
-// may be preserved through properties without coupling the engine to the
-// provider implementation.
+// runtime implementation details or native data source metadata. Provider-specific
+// information may be preserved through properties without coupling consumers to
+// the provider implementation.
 type SchemaMetadata struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Tables []*TableMetadata       `protobuf:"bytes,1,rep,name=tables,proto3" json:"tables,omitempty"`

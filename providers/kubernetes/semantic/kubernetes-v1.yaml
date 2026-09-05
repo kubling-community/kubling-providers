@@ -1,0 +1,137 @@
+format: kubling-semantic
+schemaVersion: 1
+kind: fragment
+
+metadata:
+  name: kubernetes-workloads
+  namespace: k8s
+  version: 1.0.0
+
+spec:
+  entities:
+    - id: Deployment
+      name: Deployment
+      description: A Kubernetes Deployment that manages replicated workloads.
+      binding:
+        relation: DEPLOYMENT
+      properties:
+        - id: uid
+          name: Kubernetes UID
+          type: string
+          binding:
+            field: metadata__uid
+        - id: namespace
+          name: Kubernetes namespace
+          type: string
+          binding:
+            field: metadata__namespace
+        - id: name
+          name: Deployment name
+          type: string
+          binding:
+            field: metadata__name
+      identities:
+        - id: deploymentIdentity
+          properties:
+            - namespace
+            - name
+
+    - id: ReplicaSet
+      name: ReplicaSet
+      description: A Kubernetes ReplicaSet controlled by a Deployment.
+      binding:
+        relation: REPLICA_SET
+      properties:
+        - id: uid
+          name: Kubernetes UID
+          type: string
+          binding:
+            field: metadata__uid
+        - id: namespace
+          name: Kubernetes namespace
+          type: string
+          binding:
+            field: metadata__namespace
+        - id: name
+          name: ReplicaSet name
+          type: string
+          binding:
+            field: metadata__name
+        - id: deploymentUid
+          name: Controlling Deployment UID
+          type: string
+          binding:
+            field: deployment__uid
+        - id: deploymentName
+          name: Controlling Deployment name
+          type: string
+          binding:
+            field: deployment__name
+      identities:
+        - id: replicaSetIdentity
+          properties:
+            - namespace
+            - name
+
+    - id: Pod
+      name: Pod
+      description: A Kubernetes Pod controlled by a ReplicaSet.
+      binding:
+        relation: POD
+      properties:
+        - id: uid
+          name: Kubernetes UID
+          type: string
+          binding:
+            field: metadata__uid
+        - id: namespace
+          name: Kubernetes namespace
+          type: string
+          binding:
+            field: metadata__namespace
+        - id: name
+          name: Pod name
+          type: string
+          binding:
+            field: metadata__name
+        - id: replicaSetUid
+          name: Controlling ReplicaSet UID
+          type: string
+          binding:
+            field: replica_set__uid
+        - id: replicaSetName
+          name: Controlling ReplicaSet name
+          type: string
+          binding:
+            field: replica_set__name
+      identities:
+        - id: podIdentity
+          properties:
+            - namespace
+            - name
+
+  relationships:
+    - id: DeploymentOwnsReplicaSet
+      name: Deployment owns ReplicaSet
+      from: Deployment
+      to: ReplicaSet
+      cardinality: oneToMany
+      joins:
+        - left: Deployment.uid
+          right: ReplicaSet.deploymentUid
+
+    - id: ReplicaSetOwnsPod
+      name: ReplicaSet owns Pod
+      from: ReplicaSet
+      to: Pod
+      cardinality: oneToMany
+      joins:
+        - left: ReplicaSet.uid
+          right: Pod.replicaSetUid
+
+    - id: DeploymentOwnsPod
+      name: Deployment owns Pod
+      description: A transitive domain relationship realized through DeploymentOwnsReplicaSet and ReplicaSetOwnsPod.
+      from: Deployment
+      to: Pod
+      cardinality: oneToMany

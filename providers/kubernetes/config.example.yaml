@@ -56,6 +56,8 @@ schema:
   # resource is exposed.
   #
   # Patterns use Kubernetes groupVersion/resource notation.
+  # When Kubling semantic bootstrap is enabled, retain apps/v1/deployments,
+  # apps/v1/replicasets and v1/pods because the bundled fragment binds to them.
   include:
     - "v1/*"
     - "apps/v1/*"

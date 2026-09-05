@@ -140,6 +140,110 @@ func TestQueryStreamsProjectedResourcesUsingDefaultNamespace(t *testing.T) {
 	}
 }
 
+func TestResourceColumnValueProjectsTypedControllerOwner(t *testing.T) {
+	resource := testPod("pod-a", "team-a", "Running")
+	resource.Object["metadata"].(map[string]any)["ownerReferences"] = []any{
+		map[string]any{
+			"apiVersion": "apps/v1",
+			"kind":       "ReplicaSet",
+			"name":       "provider-sample-7d8f9",
+			"uid":        "replica-set-uid",
+			"controller": true,
+		},
+	}
+	table := resourceTableMetadata(&resourceDescriptor{
+		groupVersion: schema.GroupVersion{Version: "v1"},
+		resource: metav1.APIResource{
+			Name:       "pods",
+			Kind:       "Pod",
+			Namespaced: true,
+			Verbs:      metav1.Verbs{"get", "list"},
+		},
+		tableName: "POD",
+	})
+
+	uid, err := resourceColumnValue(&resource, metadataColumn(t, table, "replica_set__uid"))
+	if err != nil || uid.GetStringValue() != "replica-set-uid" {
+		t.Fatalf("replica_set__uid = %v, %v", uid, err)
+	}
+	name, err := resourceColumnValue(&resource, metadataColumn(t, table, "replica_set__name"))
+	if err != nil || name.GetStringValue() != "provider-sample-7d8f9" {
+		t.Fatalf("replica_set__name = %v, %v", name, err)
+	}
+}
+
+func TestResourceColumnValueIgnoresNonMatchingOwner(t *testing.T) {
+	resource := testPod("pod-a", "team-a", "Running")
+	resource.Object["metadata"].(map[string]any)["ownerReferences"] = []any{
+		map[string]any{
+			"kind":       "Job",
+			"name":       "job-a",
+			"uid":        "job-uid",
+			"controller": true,
+		},
+	}
+	table := resourceTableMetadata(&resourceDescriptor{
+		groupVersion: schema.GroupVersion{Version: "v1"},
+		resource: metav1.APIResource{
+			Name:       "pods",
+			Kind:       "Pod",
+			Namespaced: true,
+			Verbs:      metav1.Verbs{"get", "list"},
+		},
+		tableName: "POD",
+	})
+
+	value, err := resourceColumnValue(&resource, metadataColumn(t, table, "replica_set__uid"))
+	if err != nil {
+		t.Fatalf("resourceColumnValue() error = %v", err)
+	}
+	if value.GetNullValue() == nil {
+		t.Fatalf("replica_set__uid = %v, want null", value)
+	}
+}
+
+func TestQueryProjectsReplicaSetOwnershipColumns(t *testing.T) {
+	pod := testPod("pod-a", "team-a", "Running")
+	pod.Object["metadata"].(map[string]any)["ownerReferences"] = []any{
+		map[string]any{
+			"kind":       "ReplicaSet",
+			"name":       "provider-sample-7d8f9",
+			"uid":        "replica-set-uid",
+			"controller": true,
+		},
+	}
+	state := &fakeDynamicState{lists: []*unstructured.UnstructuredList{{
+		Items: []unstructured.Unstructured{pod},
+	}}}
+	connection, _ := queryTestConnection(t, Config{}, state, "team-a")
+	defer connection.Close(context.Background())
+
+	stream, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity: &providerv1.EntityReference{Name: "POD", Namespace: "v1"},
+		Projections: []*providerv1.Projection{
+			fieldProjection("metadata__uid", ""),
+			fieldProjection("replica_set__uid", ""),
+			fieldProjection("replica_set__name", ""),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	defer stream.Close()
+
+	batch, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() error = %v", err)
+	}
+	values := batch.GetTuples()[0].GetValues()
+	if len(values) != 3 ||
+		values[0].GetStringValue() != "pod-a-uid" ||
+		values[1].GetStringValue() != "replica-set-uid" ||
+		values[2].GetStringValue() != "provider-sample-7d8f9" {
+		t.Fatalf("ownership tuple = %v", values)
+	}
+}
+
 func TestQueryResolvesConfiguredProviderNamespace(t *testing.T) {
 	state := &fakeDynamicState{lists: []*unstructured.UnstructuredList{{
 		Items: []unstructured.Unstructured{testPod("pod-a", "team-a", "Running")},
