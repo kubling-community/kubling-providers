@@ -21,9 +21,9 @@ cd testing/kubling
 ./run-kubling.sh
 ```
 
-`KUBLING_IMAGE` must reference a Kubling build that includes the
-`PROVIDER_GRPC` data source type. This can be a published release or a local
-development image.
+`KUBLING_IMAGE` must reference an official Kubling image that includes the
+`PROVIDER_GRPC` data source type. It defaults to `kubling/kubling:latest`; pin
+an immutable published version when reproducibility matters.
 
 In another terminal, verify that Kubling started and imported at least one
 provider table:
@@ -49,8 +49,9 @@ go run ./cmd/provider-test exec -sql "DELETE FROM provider.TASK WHERE id = 'exam
 
 The scripts define their defaults directly and allow these overrides:
 
-- `KUBLING_IMAGE`: Kubling runtime image;
-- `KUBLING_CLI_IMAGE`: image used to generate the descriptor bundle;
+- `KUBLING_IMAGE`: official Kubling runtime image;
+- `KUBLING_CLI_IMAGE`: official Kubling CLI image used to generate the
+  descriptor bundle;
 - `KUBLING_GRPC_PROVIDER_HOST` and `KUBLING_GRPC_PROVIDER_PORT`: provider
   endpoint as seen by the Kubling container;
 - `KUBLING_GRPC_PROVIDER_TIMEOUT_MILLIS`: provider RPC timeout;

@@ -21,6 +21,7 @@ const _ = grpc.SupportPackageIsVersion9
 const (
 	ProviderService_GetCapabilities_FullMethodName     = "/kubling.provider.v1.ProviderService/GetCapabilities"
 	ProviderService_GetSchema_FullMethodName           = "/kubling.provider.v1.ProviderService/GetSchema"
+	ProviderService_GetSemanticFragment_FullMethodName = "/kubling.provider.v1.ProviderService/GetSemanticFragment"
 	ProviderService_OpenConnection_FullMethodName      = "/kubling.provider.v1.ProviderService/OpenConnection"
 	ProviderService_CloseConnection_FullMethodName     = "/kubling.provider.v1.ProviderService/CloseConnection"
 	ProviderService_Health_FullMethodName              = "/kubling.provider.v1.ProviderService/Health"
@@ -47,6 +48,9 @@ type ProviderServiceClient interface {
 	// The provider may return structured metadata or Kubling DDL. Kubling may
 	// use this schema when no DDL is defined in the data source configuration.
 	GetSchema(ctx context.Context, in *GetSchemaRequest, opts ...grpc.CallOption) (*GetSchemaResponse, error)
+	// Returns the optional source-local semantic artifact exposed by this
+	// provider. This operation does not open or depend on a logical connection.
+	GetSemanticFragment(ctx context.Context, in *GetSemanticFragmentRequest, opts ...grpc.CallOption) (*GetSemanticFragmentResponse, error)
 	// Opens a logical connection to a data source.
 	OpenConnection(ctx context.Context, in *OpenConnectionRequest, opts ...grpc.CallOption) (*OpenConnectionResponse, error)
 	// Closes a logical connection and releases its associated resources.
@@ -93,6 +97,16 @@ func (c *providerServiceClient) GetSchema(ctx context.Context, in *GetSchemaRequ
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetSchemaResponse)
 	err := c.cc.Invoke(ctx, ProviderService_GetSchema_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) GetSemanticFragment(ctx context.Context, in *GetSemanticFragmentRequest, opts ...grpc.CallOption) (*GetSemanticFragmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSemanticFragmentResponse)
+	err := c.cc.Invoke(ctx, ProviderService_GetSemanticFragment_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -231,6 +245,9 @@ type ProviderServiceServer interface {
 	// The provider may return structured metadata or Kubling DDL. Kubling may
 	// use this schema when no DDL is defined in the data source configuration.
 	GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error)
+	// Returns the optional source-local semantic artifact exposed by this
+	// provider. This operation does not open or depend on a logical connection.
+	GetSemanticFragment(context.Context, *GetSemanticFragmentRequest) (*GetSemanticFragmentResponse, error)
 	// Opens a logical connection to a data source.
 	OpenConnection(context.Context, *OpenConnectionRequest) (*OpenConnectionResponse, error)
 	// Closes a logical connection and releases its associated resources.
@@ -268,6 +285,9 @@ func (UnimplementedProviderServiceServer) GetCapabilities(context.Context, *GetC
 }
 func (UnimplementedProviderServiceServer) GetSchema(context.Context, *GetSchemaRequest) (*GetSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
+}
+func (UnimplementedProviderServiceServer) GetSemanticFragment(context.Context, *GetSemanticFragmentRequest) (*GetSemanticFragmentResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSemanticFragment not implemented")
 }
 func (UnimplementedProviderServiceServer) OpenConnection(context.Context, *OpenConnectionRequest) (*OpenConnectionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method OpenConnection not implemented")
@@ -355,6 +375,24 @@ func _ProviderService_GetSchema_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ProviderServiceServer).GetSchema(ctx, req.(*GetSchemaRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_GetSemanticFragment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSemanticFragmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).GetSemanticFragment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_GetSemanticFragment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).GetSemanticFragment(ctx, req.(*GetSemanticFragmentRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -564,6 +602,10 @@ var ProviderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSchema",
 			Handler:    _ProviderService_GetSchema_Handler,
+		},
+		{
+			MethodName: "GetSemanticFragment",
+			Handler:    _ProviderService_GetSemanticFragment_Handler,
 		},
 		{
 			MethodName: "OpenConnection",

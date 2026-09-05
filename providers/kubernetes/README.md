@@ -31,7 +31,7 @@ prepended to those components. The native resource identity remains available
 as a unique key. This rule follows discovery automatically and does not require
 listing resources in the provider configuration.
 
-Kubling Core may define synthetic tables over JSON columns that remain in the
+Kubling may define synthetic tables over JSON columns that remain in the
 discovered schema. The provider remains unaware of synthetic table definitions.
 
 Queries use the dynamic Kubernetes API with native continuation-token
@@ -45,6 +45,42 @@ column level. Inserts create canonical Kubernetes objects, updates use merge
 patch when available and fall back to resource update, and deletes require
 exact resource identity. Server-managed fields and the status subresource
 remain read-only.
+
+The catalog also exposes the Kubernetes controller chain used by replicated
+workloads. `REPLICA_SET` includes read-only `deployment__uid` and
+`deployment__name` columns derived from its controlling owner reference, while
+`POD` includes equivalent `replica_set__uid` and `replica_set__name` columns.
+The returned schema metadata declares foreign keys from these typed owner
+columns to the corresponding resource UID. Other controller kinds produce null
+values rather than an incorrect relationship.
+
+## Semantic fragment
+
+The provider always offers a bundled `kubling-semantic` schema-version 1
+fragment. It defines the source-local `Deployment`, `ReplicaSet`, and `Pod`
+entities and executable ownership relationships for the real Kubernetes chain:
+
+```text
+Deployment -> ReplicaSet -> Pod
+```
+
+It also declares `DeploymentOwnsPod` as the transitive domain relationship,
+without inventing a direct physical join that Kubernetes does not provide. All
+relation and field bindings are local names such as `DEPLOYMENT` and
+`metadata__uid`; the provider never embeds the Kubling schema name. Kubling
+qualifies those relations for the logical data-source schema during semantic
+bootstrap.
+
+The artifact is embedded in the provider binary at
+[`semantic/kubernetes-v1.yaml`](semantic/kubernetes-v1.yaml). Retrieval does
+not open a logical connection or contact the Kubernetes API. The SDK preserves
+the exact bytes and returns `application/yaml`, version `1.0.0`, and the SHA-256
+digest of those bytes.
+
+When semantic bootstrap is enabled, the provider catalog must retain
+`apps/v1/deployments`, `apps/v1/replicasets`, and `v1/pods`. Configurations that
+filter out one of these resources cannot satisfy the fragment bindings and are
+expected to fail semantic validation visibly.
 
 ## Configuration
 
@@ -90,7 +126,7 @@ mode `0600`, and is ignored by the repository-wide `*.local.yaml` rule. The
 tracked `local/provider.yaml` references it and uses
 `blankNamespaceStrategy: ALL`.
 
-To start only k3s and leave it available for Kubling Core:
+To start only k3s and leave it available for Kubling:
 
 ```sh
 ./local/run.sh k3s
@@ -126,4 +162,44 @@ With only k3s running, execute the provider integration test with:
 ```sh
 ./local/run.sh k3s
 KUBLING_KUBERNETES_INTEGRATION=1 go test -run TestKubernetesIntegrationMetadataAndQuery -v .
+```
+
+To verify the semantic contract against the running provider process, keep
+`./local/run.sh` running in one terminal and execute in another:
+
+```sh
+KUBLING_KUBERNETES_SERVER_INTEGRATION=1 \
+  go test -run TestKubernetesIntegrationSemanticFragmentServer -v .
+
+grpcurl -plaintext -d '{}' \
+  127.0.0.1:50054 \
+  kubling.provider.v1.ProviderService/GetSemanticFragment
+```
+
+### Test with Kubling
+
+Use the shared container-based compatibility template to test the provider
+through an official Kubling image. For semantic bootstrap validation, the VDB
+should have no authored composition and should enable semantic activation
+explicitly:
+
+```yaml
+semanticModel:
+  activationFailurePolicy: failStartup
+```
+
+Start the provider with `./local/run.sh`. From the repository root, start the
+official Kubling image in a second terminal. The compatibility VDB uses metadata
+discovery rather than DDL:
+
+```sh
+KUBLING_IMAGE=kubling/kubling:latest \
+KUBLING_GRPC_PROVIDER_PORT=50054 \
+  ./testing/kubling/run-kubling.sh
+```
+
+Run the metadata smoke test from a third terminal:
+
+```sh
+./testing/kubling/smoke.sh
 ```

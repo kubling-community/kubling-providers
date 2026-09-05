@@ -169,6 +169,9 @@ func resourceColumnValue(
 	if resource == nil || column == nil {
 		return nil, fmt.Errorf("resource and column are required")
 	}
+	if value, handled, err := ownerReferenceColumnValue(resource, column); handled {
+		return value, err
+	}
 
 	sourceName := strings.TrimSpace(column.GetSourceName())
 	if sourceName == "" {

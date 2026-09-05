@@ -77,6 +77,7 @@ func buildMetadataWithSchema(
 			),
 		)
 	}
+	applyOwnerReferenceForeignKeys(metadata)
 	sort.Slice(metadata.Tables, func(left int, right int) bool {
 		return metadata.Tables[left].GetName() < metadata.Tables[right].GetName()
 	})
@@ -302,6 +303,7 @@ func resourceColumnsWithOptions(
 		jsonColumn("spec", "spec", &nullable, &documentInput),
 		jsonColumn("status", "status", &nullable, &notUpdatable),
 	)
+	columns = append(columns, ownerReferenceColumns(descriptor)...)
 	if includeObject {
 		columns = append(columns, jsonColumn("object", "$", &notNullable, &documentInput))
 	}

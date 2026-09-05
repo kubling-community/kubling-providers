@@ -9,9 +9,10 @@ behavior.
 ## Before you start
 
 Providers keep source-specific connectivity, metadata discovery and execution
-outside Kubling Engine. A provider should expose what its source can actually
-do and advertise only the capabilities it implements. Do not emulate a feature
-inside the provider merely to make its capability list look more complete.
+outside the Kubling runtime. A provider should expose what its source can
+actually do and advertise only the capabilities it implements. Do not emulate
+a feature inside the provider merely to make its capability list look more
+complete.
 
 Start by reading:
 

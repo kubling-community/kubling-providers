@@ -6,6 +6,7 @@ import "kubling/provider/v1/capabilities.proto";
 import "kubling/provider/v1/connection.proto";
 import "kubling/provider/v1/mutation.proto";
 import "kubling/provider/v1/query.proto";
+import "kubling/provider/v1/semantic.proto";
 
 option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
 option java_multiple_files = true;
@@ -22,6 +23,10 @@ service ProviderService {
   // The provider may return structured metadata or Kubling DDL. Kubling may
   // use this schema when no DDL is defined in the data source configuration.
   rpc GetSchema(GetSchemaRequest) returns (GetSchemaResponse);
+
+  // Returns the optional source-local semantic artifact exposed by this
+  // provider. This operation does not open or depend on a logical connection.
+  rpc GetSemanticFragment(GetSemanticFragmentRequest) returns (GetSemanticFragmentResponse);
 
   // Opens a logical connection to a data source.
   rpc OpenConnection(OpenConnectionRequest) returns (OpenConnectionResponse);
