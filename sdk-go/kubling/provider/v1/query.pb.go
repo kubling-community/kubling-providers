@@ -154,9 +154,14 @@ type QueryRequest struct {
 	//
 	// This is a hint. When absent, the provider chooses an appropriate
 	// batch size.
-	BatchSize     *uint32 `protobuf:"varint,8,opt,name=batch_size,json=batchSize,proto3,oneof" json:"batch_size,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	BatchSize *uint32 `protobuf:"varint,8,opt,name=batch_size,json=batchSize,proto3,oneof" json:"batch_size,omitempty"`
+	// Optional value representations Kubling accepts in QueryResponse.
+	//
+	// Providers must not emit an optional representation unless its canonical
+	// feature name appears here, even when the provider advertises support.
+	AcceptedFeatures []string `protobuf:"bytes,9,rep,name=accepted_features,json=acceptedFeatures,proto3" json:"accepted_features,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *QueryRequest) Reset() {
@@ -243,6 +248,13 @@ func (x *QueryRequest) GetBatchSize() uint32 {
 		return *x.BatchSize
 	}
 	return 0
+}
+
+func (x *QueryRequest) GetAcceptedFeatures() []string {
+	if x != nil {
+		return x.AcceptedFeatures
+	}
+	return nil
 }
 
 // Logical entity exposed through the Kubling model.
@@ -471,7 +483,7 @@ var File_kubling_provider_v1_query_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\n" +
-	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xa6\x03\n" +
+	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xd3\x03\n" +
 	"\fQueryRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12<\n" +
 	"\x06entity\x18\x02 \x01(\v2$.kubling.provider.v1.EntityReferenceR\x06entity\x12A\n" +
@@ -481,7 +493,8 @@ const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\x05limit\x18\x06 \x01(\x04H\x00R\x05limit\x88\x01\x01\x12\x1b\n" +
 	"\x06offset\x18\a \x01(\x04H\x01R\x06offset\x88\x01\x01\x12\"\n" +
 	"\n" +
-	"batch_size\x18\b \x01(\rH\x02R\tbatchSize\x88\x01\x01B\b\n" +
+	"batch_size\x18\b \x01(\rH\x02R\tbatchSize\x88\x01\x01\x12+\n" +
+	"\x11accepted_features\x18\t \x03(\tR\x10acceptedFeaturesB\b\n" +
 	"\x06_limitB\t\n" +
 	"\a_offsetB\r\n" +
 	"\v_batch_size\"C\n" +

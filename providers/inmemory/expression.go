@@ -239,6 +239,9 @@ func expressionValueType(
 			return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
 				fmt.Errorf("projection literal is required")
 		}
+		if declaredType := kind.Literal.GetDeclaredType(); declaredType != nil {
+			return declaredType.GetType(), nil
+		}
 
 		return valueType(kind.Literal.GetValue())
 	case *providerv1.Expression_Comparison,
@@ -297,12 +300,18 @@ func valueType(value *kublingv1.Value) (kublingv1.ValueType, error) {
 		return kublingv1.ValueType_VALUE_TYPE_CLOB, nil
 	case *kublingv1.Value_GeometryValue:
 		return kublingv1.ValueType_VALUE_TYPE_GEOMETRY, nil
+	case *kublingv1.Value_GeometryWithCrs:
+		return kublingv1.ValueType_VALUE_TYPE_GEOMETRY, nil
 	case *kublingv1.Value_GeographyValue:
+		return kublingv1.ValueType_VALUE_TYPE_GEOGRAPHY, nil
+	case *kublingv1.Value_GeographyWithCrs:
 		return kublingv1.ValueType_VALUE_TYPE_GEOGRAPHY, nil
 	case *kublingv1.Value_JsonValue:
 		return kublingv1.ValueType_VALUE_TYPE_JSON, nil
 	case *kublingv1.Value_XmlValue:
 		return kublingv1.ValueType_VALUE_TYPE_XML, nil
+	case *kublingv1.Value_ArrayValue:
+		return kublingv1.ValueType_VALUE_TYPE_ARRAY, nil
 	case *kublingv1.Value_NullValue:
 		return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
 			fmt.Errorf("cannot infer the type of a null literal")

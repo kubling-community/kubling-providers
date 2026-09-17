@@ -30,6 +30,8 @@ const (
 	ProviderService_RollbackTransaction_FullMethodName = "/kubling.provider.v1.ProviderService/RollbackTransaction"
 	ProviderService_IsInTransaction_FullMethodName     = "/kubling.provider.v1.ProviderService/IsInTransaction"
 	ProviderService_Query_FullMethodName               = "/kubling.provider.v1.ProviderService/Query"
+	ProviderService_ReadLob_FullMethodName             = "/kubling.provider.v1.ProviderService/ReadLob"
+	ProviderService_ReleaseLob_FullMethodName          = "/kubling.provider.v1.ProviderService/ReleaseLob"
 	ProviderService_Insert_FullMethodName              = "/kubling.provider.v1.ProviderService/Insert"
 	ProviderService_Update_FullMethodName              = "/kubling.provider.v1.ProviderService/Update"
 	ProviderService_Delete_FullMethodName              = "/kubling.provider.v1.ProviderService/Delete"
@@ -67,6 +69,11 @@ type ProviderServiceClient interface {
 	IsInTransaction(ctx context.Context, in *IsInTransactionRequest, opts ...grpc.CallOption) (*IsInTransactionResponse, error)
 	// Executes a query and streams its result in batches.
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[QueryResponse], error)
+	// Reads a provider-owned LOB so Kubling can materialize it into the
+	// client-facing LOB store.
+	ReadLob(ctx context.Context, in *ReadLobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadLobResponse], error)
+	// Releases a provider-owned LOB after materialization or abandonment.
+	ReleaseLob(ctx context.Context, in *ReleaseLobRequest, opts ...grpc.CallOption) (*ReleaseLobResponse, error)
 	// Inserts one or more tuples.
 	Insert(ctx context.Context, in *InsertRequest, opts ...grpc.CallOption) (*InsertResponse, error)
 	// Updates tuples selected by the request.
@@ -202,6 +209,35 @@ func (c *providerServiceClient) Query(ctx context.Context, in *QueryRequest, opt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProviderService_QueryClient = grpc.ServerStreamingClient[QueryResponse]
 
+func (c *providerServiceClient) ReadLob(ctx context.Context, in *ReadLobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadLobResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[1], ProviderService_ReadLob_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[ReadLobRequest, ReadLobResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProviderService_ReadLobClient = grpc.ServerStreamingClient[ReadLobResponse]
+
+func (c *providerServiceClient) ReleaseLob(ctx context.Context, in *ReleaseLobRequest, opts ...grpc.CallOption) (*ReleaseLobResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReleaseLobResponse)
+	err := c.cc.Invoke(ctx, ProviderService_ReleaseLob_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *providerServiceClient) Insert(ctx context.Context, in *InsertRequest, opts ...grpc.CallOption) (*InsertResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(InsertResponse)
@@ -264,6 +300,11 @@ type ProviderServiceServer interface {
 	IsInTransaction(context.Context, *IsInTransactionRequest) (*IsInTransactionResponse, error)
 	// Executes a query and streams its result in batches.
 	Query(*QueryRequest, grpc.ServerStreamingServer[QueryResponse]) error
+	// Reads a provider-owned LOB so Kubling can materialize it into the
+	// client-facing LOB store.
+	ReadLob(*ReadLobRequest, grpc.ServerStreamingServer[ReadLobResponse]) error
+	// Releases a provider-owned LOB after materialization or abandonment.
+	ReleaseLob(context.Context, *ReleaseLobRequest) (*ReleaseLobResponse, error)
 	// Inserts one or more tuples.
 	Insert(context.Context, *InsertRequest) (*InsertResponse, error)
 	// Updates tuples selected by the request.
@@ -312,6 +353,12 @@ func (UnimplementedProviderServiceServer) IsInTransaction(context.Context, *IsIn
 }
 func (UnimplementedProviderServiceServer) Query(*QueryRequest, grpc.ServerStreamingServer[QueryResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method Query not implemented")
+}
+func (UnimplementedProviderServiceServer) ReadLob(*ReadLobRequest, grpc.ServerStreamingServer[ReadLobResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method ReadLob not implemented")
+}
+func (UnimplementedProviderServiceServer) ReleaseLob(context.Context, *ReleaseLobRequest) (*ReleaseLobResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReleaseLob not implemented")
 }
 func (UnimplementedProviderServiceServer) Insert(context.Context, *InsertRequest) (*InsertResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Insert not implemented")
@@ -534,6 +581,35 @@ func _ProviderService_Query_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type ProviderService_QueryServer = grpc.ServerStreamingServer[QueryResponse]
 
+func _ProviderService_ReadLob_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(ReadLobRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProviderServiceServer).ReadLob(m, &grpc.GenericServerStream[ReadLobRequest, ReadLobResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProviderService_ReadLobServer = grpc.ServerStreamingServer[ReadLobResponse]
+
+func _ProviderService_ReleaseLob_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleaseLobRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).ReleaseLob(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_ReleaseLob_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).ReleaseLob(ctx, req.(*ReleaseLobRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProviderService_Insert_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(InsertRequest)
 	if err := dec(in); err != nil {
@@ -636,6 +712,10 @@ var ProviderService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProviderService_IsInTransaction_Handler,
 		},
 		{
+			MethodName: "ReleaseLob",
+			Handler:    _ProviderService_ReleaseLob_Handler,
+		},
+		{
 			MethodName: "Insert",
 			Handler:    _ProviderService_Insert_Handler,
 		},
@@ -652,6 +732,11 @@ var ProviderService_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "Query",
 			Handler:       _ProviderService_Query_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "ReadLob",
+			Handler:       _ProviderService_ReadLob_Handler,
 			ServerStreams: true,
 		},
 	},

@@ -24,7 +24,7 @@ var File_kubling_provider_v1_provider_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_provider_proto_rawDesc = "" +
 	"\n" +
-	"\"kubling/provider/v1/provider.proto\x12\x13kubling.provider.v1\x1a&kubling/provider/v1/capabilities.proto\x1a$kubling/provider/v1/connection.proto\x1a\"kubling/provider/v1/mutation.proto\x1a\x1fkubling/provider/v1/query.proto\x1a\"kubling/provider/v1/semantic.proto2\x99\v\n" +
+	"\"kubling/provider/v1/provider.proto\x12\x13kubling.provider.v1\x1a&kubling/provider/v1/capabilities.proto\x1a$kubling/provider/v1/connection.proto\x1a\x1dkubling/provider/v1/lob.proto\x1a\"kubling/provider/v1/mutation.proto\x1a\x1fkubling/provider/v1/query.proto\x1a\"kubling/provider/v1/semantic.proto2\xd0\f\n" +
 	"\x0fProviderService\x12l\n" +
 	"\x0fGetCapabilities\x12+.kubling.provider.v1.GetCapabilitiesRequest\x1a,.kubling.provider.v1.GetCapabilitiesResponse\x12Z\n" +
 	"\tGetSchema\x12%.kubling.provider.v1.GetSchemaRequest\x1a&.kubling.provider.v1.GetSchemaResponse\x12x\n" +
@@ -36,7 +36,10 @@ const file_kubling_provider_v1_provider_proto_rawDesc = "" +
 	"\x11CommitTransaction\x12-.kubling.provider.v1.CommitTransactionRequest\x1a..kubling.provider.v1.CommitTransactionResponse\x12x\n" +
 	"\x13RollbackTransaction\x12/.kubling.provider.v1.RollbackTransactionRequest\x1a0.kubling.provider.v1.RollbackTransactionResponse\x12l\n" +
 	"\x0fIsInTransaction\x12+.kubling.provider.v1.IsInTransactionRequest\x1a,.kubling.provider.v1.IsInTransactionResponse\x12P\n" +
-	"\x05Query\x12!.kubling.provider.v1.QueryRequest\x1a\".kubling.provider.v1.QueryResponse0\x01\x12Q\n" +
+	"\x05Query\x12!.kubling.provider.v1.QueryRequest\x1a\".kubling.provider.v1.QueryResponse0\x01\x12V\n" +
+	"\aReadLob\x12#.kubling.provider.v1.ReadLobRequest\x1a$.kubling.provider.v1.ReadLobResponse0\x01\x12]\n" +
+	"\n" +
+	"ReleaseLob\x12&.kubling.provider.v1.ReleaseLobRequest\x1a'.kubling.provider.v1.ReleaseLobResponse\x12Q\n" +
 	"\x06Insert\x12\".kubling.provider.v1.InsertRequest\x1a#.kubling.provider.v1.InsertResponse\x12Q\n" +
 	"\x06Update\x12\".kubling.provider.v1.UpdateRequest\x1a#.kubling.provider.v1.UpdateResponse\x12Q\n" +
 	"\x06Delete\x12\".kubling.provider.v1.DeleteRequest\x1a#.kubling.provider.v1.DeleteResponseB\x82\x01\n" +
@@ -54,23 +57,27 @@ var file_kubling_provider_v1_provider_proto_goTypes = []any{
 	(*RollbackTransactionRequest)(nil),  // 8: kubling.provider.v1.RollbackTransactionRequest
 	(*IsInTransactionRequest)(nil),      // 9: kubling.provider.v1.IsInTransactionRequest
 	(*QueryRequest)(nil),                // 10: kubling.provider.v1.QueryRequest
-	(*InsertRequest)(nil),               // 11: kubling.provider.v1.InsertRequest
-	(*UpdateRequest)(nil),               // 12: kubling.provider.v1.UpdateRequest
-	(*DeleteRequest)(nil),               // 13: kubling.provider.v1.DeleteRequest
-	(*GetCapabilitiesResponse)(nil),     // 14: kubling.provider.v1.GetCapabilitiesResponse
-	(*GetSchemaResponse)(nil),           // 15: kubling.provider.v1.GetSchemaResponse
-	(*GetSemanticFragmentResponse)(nil), // 16: kubling.provider.v1.GetSemanticFragmentResponse
-	(*OpenConnectionResponse)(nil),      // 17: kubling.provider.v1.OpenConnectionResponse
-	(*CloseConnectionResponse)(nil),     // 18: kubling.provider.v1.CloseConnectionResponse
-	(*HealthResponse)(nil),              // 19: kubling.provider.v1.HealthResponse
-	(*BeginTransactionResponse)(nil),    // 20: kubling.provider.v1.BeginTransactionResponse
-	(*CommitTransactionResponse)(nil),   // 21: kubling.provider.v1.CommitTransactionResponse
-	(*RollbackTransactionResponse)(nil), // 22: kubling.provider.v1.RollbackTransactionResponse
-	(*IsInTransactionResponse)(nil),     // 23: kubling.provider.v1.IsInTransactionResponse
-	(*QueryResponse)(nil),               // 24: kubling.provider.v1.QueryResponse
-	(*InsertResponse)(nil),              // 25: kubling.provider.v1.InsertResponse
-	(*UpdateResponse)(nil),              // 26: kubling.provider.v1.UpdateResponse
-	(*DeleteResponse)(nil),              // 27: kubling.provider.v1.DeleteResponse
+	(*ReadLobRequest)(nil),              // 11: kubling.provider.v1.ReadLobRequest
+	(*ReleaseLobRequest)(nil),           // 12: kubling.provider.v1.ReleaseLobRequest
+	(*InsertRequest)(nil),               // 13: kubling.provider.v1.InsertRequest
+	(*UpdateRequest)(nil),               // 14: kubling.provider.v1.UpdateRequest
+	(*DeleteRequest)(nil),               // 15: kubling.provider.v1.DeleteRequest
+	(*GetCapabilitiesResponse)(nil),     // 16: kubling.provider.v1.GetCapabilitiesResponse
+	(*GetSchemaResponse)(nil),           // 17: kubling.provider.v1.GetSchemaResponse
+	(*GetSemanticFragmentResponse)(nil), // 18: kubling.provider.v1.GetSemanticFragmentResponse
+	(*OpenConnectionResponse)(nil),      // 19: kubling.provider.v1.OpenConnectionResponse
+	(*CloseConnectionResponse)(nil),     // 20: kubling.provider.v1.CloseConnectionResponse
+	(*HealthResponse)(nil),              // 21: kubling.provider.v1.HealthResponse
+	(*BeginTransactionResponse)(nil),    // 22: kubling.provider.v1.BeginTransactionResponse
+	(*CommitTransactionResponse)(nil),   // 23: kubling.provider.v1.CommitTransactionResponse
+	(*RollbackTransactionResponse)(nil), // 24: kubling.provider.v1.RollbackTransactionResponse
+	(*IsInTransactionResponse)(nil),     // 25: kubling.provider.v1.IsInTransactionResponse
+	(*QueryResponse)(nil),               // 26: kubling.provider.v1.QueryResponse
+	(*ReadLobResponse)(nil),             // 27: kubling.provider.v1.ReadLobResponse
+	(*ReleaseLobResponse)(nil),          // 28: kubling.provider.v1.ReleaseLobResponse
+	(*InsertResponse)(nil),              // 29: kubling.provider.v1.InsertResponse
+	(*UpdateResponse)(nil),              // 30: kubling.provider.v1.UpdateResponse
+	(*DeleteResponse)(nil),              // 31: kubling.provider.v1.DeleteResponse
 }
 var file_kubling_provider_v1_provider_proto_depIdxs = []int32{
 	0,  // 0: kubling.provider.v1.ProviderService.GetCapabilities:input_type -> kubling.provider.v1.GetCapabilitiesRequest
@@ -84,25 +91,29 @@ var file_kubling_provider_v1_provider_proto_depIdxs = []int32{
 	8,  // 8: kubling.provider.v1.ProviderService.RollbackTransaction:input_type -> kubling.provider.v1.RollbackTransactionRequest
 	9,  // 9: kubling.provider.v1.ProviderService.IsInTransaction:input_type -> kubling.provider.v1.IsInTransactionRequest
 	10, // 10: kubling.provider.v1.ProviderService.Query:input_type -> kubling.provider.v1.QueryRequest
-	11, // 11: kubling.provider.v1.ProviderService.Insert:input_type -> kubling.provider.v1.InsertRequest
-	12, // 12: kubling.provider.v1.ProviderService.Update:input_type -> kubling.provider.v1.UpdateRequest
-	13, // 13: kubling.provider.v1.ProviderService.Delete:input_type -> kubling.provider.v1.DeleteRequest
-	14, // 14: kubling.provider.v1.ProviderService.GetCapabilities:output_type -> kubling.provider.v1.GetCapabilitiesResponse
-	15, // 15: kubling.provider.v1.ProviderService.GetSchema:output_type -> kubling.provider.v1.GetSchemaResponse
-	16, // 16: kubling.provider.v1.ProviderService.GetSemanticFragment:output_type -> kubling.provider.v1.GetSemanticFragmentResponse
-	17, // 17: kubling.provider.v1.ProviderService.OpenConnection:output_type -> kubling.provider.v1.OpenConnectionResponse
-	18, // 18: kubling.provider.v1.ProviderService.CloseConnection:output_type -> kubling.provider.v1.CloseConnectionResponse
-	19, // 19: kubling.provider.v1.ProviderService.Health:output_type -> kubling.provider.v1.HealthResponse
-	20, // 20: kubling.provider.v1.ProviderService.BeginTransaction:output_type -> kubling.provider.v1.BeginTransactionResponse
-	21, // 21: kubling.provider.v1.ProviderService.CommitTransaction:output_type -> kubling.provider.v1.CommitTransactionResponse
-	22, // 22: kubling.provider.v1.ProviderService.RollbackTransaction:output_type -> kubling.provider.v1.RollbackTransactionResponse
-	23, // 23: kubling.provider.v1.ProviderService.IsInTransaction:output_type -> kubling.provider.v1.IsInTransactionResponse
-	24, // 24: kubling.provider.v1.ProviderService.Query:output_type -> kubling.provider.v1.QueryResponse
-	25, // 25: kubling.provider.v1.ProviderService.Insert:output_type -> kubling.provider.v1.InsertResponse
-	26, // 26: kubling.provider.v1.ProviderService.Update:output_type -> kubling.provider.v1.UpdateResponse
-	27, // 27: kubling.provider.v1.ProviderService.Delete:output_type -> kubling.provider.v1.DeleteResponse
-	14, // [14:28] is the sub-list for method output_type
-	0,  // [0:14] is the sub-list for method input_type
+	11, // 11: kubling.provider.v1.ProviderService.ReadLob:input_type -> kubling.provider.v1.ReadLobRequest
+	12, // 12: kubling.provider.v1.ProviderService.ReleaseLob:input_type -> kubling.provider.v1.ReleaseLobRequest
+	13, // 13: kubling.provider.v1.ProviderService.Insert:input_type -> kubling.provider.v1.InsertRequest
+	14, // 14: kubling.provider.v1.ProviderService.Update:input_type -> kubling.provider.v1.UpdateRequest
+	15, // 15: kubling.provider.v1.ProviderService.Delete:input_type -> kubling.provider.v1.DeleteRequest
+	16, // 16: kubling.provider.v1.ProviderService.GetCapabilities:output_type -> kubling.provider.v1.GetCapabilitiesResponse
+	17, // 17: kubling.provider.v1.ProviderService.GetSchema:output_type -> kubling.provider.v1.GetSchemaResponse
+	18, // 18: kubling.provider.v1.ProviderService.GetSemanticFragment:output_type -> kubling.provider.v1.GetSemanticFragmentResponse
+	19, // 19: kubling.provider.v1.ProviderService.OpenConnection:output_type -> kubling.provider.v1.OpenConnectionResponse
+	20, // 20: kubling.provider.v1.ProviderService.CloseConnection:output_type -> kubling.provider.v1.CloseConnectionResponse
+	21, // 21: kubling.provider.v1.ProviderService.Health:output_type -> kubling.provider.v1.HealthResponse
+	22, // 22: kubling.provider.v1.ProviderService.BeginTransaction:output_type -> kubling.provider.v1.BeginTransactionResponse
+	23, // 23: kubling.provider.v1.ProviderService.CommitTransaction:output_type -> kubling.provider.v1.CommitTransactionResponse
+	24, // 24: kubling.provider.v1.ProviderService.RollbackTransaction:output_type -> kubling.provider.v1.RollbackTransactionResponse
+	25, // 25: kubling.provider.v1.ProviderService.IsInTransaction:output_type -> kubling.provider.v1.IsInTransactionResponse
+	26, // 26: kubling.provider.v1.ProviderService.Query:output_type -> kubling.provider.v1.QueryResponse
+	27, // 27: kubling.provider.v1.ProviderService.ReadLob:output_type -> kubling.provider.v1.ReadLobResponse
+	28, // 28: kubling.provider.v1.ProviderService.ReleaseLob:output_type -> kubling.provider.v1.ReleaseLobResponse
+	29, // 29: kubling.provider.v1.ProviderService.Insert:output_type -> kubling.provider.v1.InsertResponse
+	30, // 30: kubling.provider.v1.ProviderService.Update:output_type -> kubling.provider.v1.UpdateResponse
+	31, // 31: kubling.provider.v1.ProviderService.Delete:output_type -> kubling.provider.v1.DeleteResponse
+	16, // [16:32] is the sub-list for method output_type
+	0,  // [0:16] is the sub-list for method input_type
 	0,  // [0:0] is the sub-list for extension type_name
 	0,  // [0:0] is the sub-list for extension extendee
 	0,  // [0:0] is the sub-list for field type_name
@@ -115,6 +126,7 @@ func file_kubling_provider_v1_provider_proto_init() {
 	}
 	file_kubling_provider_v1_capabilities_proto_init()
 	file_kubling_provider_v1_connection_proto_init()
+	file_kubling_provider_v1_lob_proto_init()
 	file_kubling_provider_v1_mutation_proto_init()
 	file_kubling_provider_v1_query_proto_init()
 	file_kubling_provider_v1_semantic_proto_init()

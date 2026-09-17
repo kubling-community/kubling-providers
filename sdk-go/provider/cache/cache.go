@@ -132,10 +132,18 @@ func (p *Provider) Open(
 		return connection, err
 	}
 
-	return &cachedConnection{
+	cached := &cachedConnection{
 		Connection: connection,
 		state:      p.state,
-	}, nil
+	}
+	if lobConnection, ok := connection.(providersdk.LobConnection); ok {
+		return &lobCachedConnection{
+			cachedConnection: cached,
+			lobConnection:    lobConnection,
+		}, nil
+	}
+
+	return cached, nil
 }
 
 // Invalidate invalidates selected entities in the provider data universe.

@@ -454,8 +454,13 @@ func (x *FieldReference) GetName() string {
 
 // Literal value used in an expression.
 type Literal struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         *v1.Value              `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Value *v1.Value              `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	// Complete declared type of the literal when value alone is insufficient.
+	//
+	// This preserves recursive ARRAY types and the type of explicit null values.
+	// When value is non-null, its concrete kind must match this descriptor.
+	DeclaredType  *v1.TypeDescriptor `protobuf:"bytes,2,opt,name=declared_type,json=declaredType,proto3" json:"declared_type,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -493,6 +498,13 @@ func (*Literal) Descriptor() ([]byte, []int) {
 func (x *Literal) GetValue() *v1.Value {
 	if x != nil {
 		return x.Value
+	}
+	return nil
+}
+
+func (x *Literal) GetDeclaredType() *v1.TypeDescriptor {
+	if x != nil {
+		return x.DeclaredType
 	}
 	return nil
 }
@@ -819,9 +831,10 @@ const file_kubling_provider_v1_expression_proto_rawDesc = "" +
 	"\apattern\x18\a \x01(\v2&.kubling.provider.v1.PatternExpressionH\x00R\apatternB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x0eFieldReference\x12\x12\n" +
-	"\x04name\x18\x01 \x01(\tR\x04name\"2\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"s\n" +
 	"\aLiteral\x12'\n" +
-	"\x05value\x18\x01 \x01(\v2\x11.kubling.v1.ValueR\x05value\"\xc7\x01\n" +
+	"\x05value\x18\x01 \x01(\v2\x11.kubling.v1.ValueR\x05value\x12?\n" +
+	"\rdeclared_type\x18\x02 \x01(\v2\x1a.kubling.v1.TypeDescriptorR\fdeclaredType\"\xc7\x01\n" +
 	"\x14ComparisonExpression\x12C\n" +
 	"\boperator\x18\x01 \x01(\x0e2'.kubling.provider.v1.ComparisonOperatorR\boperator\x123\n" +
 	"\x04left\x18\x02 \x01(\v2\x1f.kubling.provider.v1.ExpressionR\x04left\x125\n" +
@@ -894,6 +907,7 @@ var file_kubling_provider_v1_expression_proto_goTypes = []any{
 	(*PatternExpression)(nil),    // 10: kubling.provider.v1.PatternExpression
 	(*FunctionCall)(nil),         // 11: kubling.provider.v1.FunctionCall
 	(*v1.Value)(nil),             // 12: kubling.v1.Value
+	(*v1.TypeDescriptor)(nil),    // 13: kubling.v1.TypeDescriptor
 }
 var file_kubling_provider_v1_expression_proto_depIdxs = []int32{
 	5,  // 0: kubling.provider.v1.Expression.field:type_name -> kubling.provider.v1.FieldReference
@@ -904,22 +918,23 @@ var file_kubling_provider_v1_expression_proto_depIdxs = []int32{
 	11, // 5: kubling.provider.v1.Expression.function_call:type_name -> kubling.provider.v1.FunctionCall
 	10, // 6: kubling.provider.v1.Expression.pattern:type_name -> kubling.provider.v1.PatternExpression
 	12, // 7: kubling.provider.v1.Literal.value:type_name -> kubling.v1.Value
-	0,  // 8: kubling.provider.v1.ComparisonExpression.operator:type_name -> kubling.provider.v1.ComparisonOperator
-	4,  // 9: kubling.provider.v1.ComparisonExpression.left:type_name -> kubling.provider.v1.Expression
-	4,  // 10: kubling.provider.v1.ComparisonExpression.right:type_name -> kubling.provider.v1.Expression
-	1,  // 11: kubling.provider.v1.LogicalExpression.operator:type_name -> kubling.provider.v1.LogicalOperator
-	4,  // 12: kubling.provider.v1.LogicalExpression.operands:type_name -> kubling.provider.v1.Expression
-	2,  // 13: kubling.provider.v1.NullPredicate.operator:type_name -> kubling.provider.v1.NullPredicateOperator
-	4,  // 14: kubling.provider.v1.NullPredicate.expression:type_name -> kubling.provider.v1.Expression
-	3,  // 15: kubling.provider.v1.PatternExpression.operator:type_name -> kubling.provider.v1.PatternOperator
-	4,  // 16: kubling.provider.v1.PatternExpression.value:type_name -> kubling.provider.v1.Expression
-	4,  // 17: kubling.provider.v1.PatternExpression.pattern:type_name -> kubling.provider.v1.Expression
-	4,  // 18: kubling.provider.v1.FunctionCall.arguments:type_name -> kubling.provider.v1.Expression
-	19, // [19:19] is the sub-list for method output_type
-	19, // [19:19] is the sub-list for method input_type
-	19, // [19:19] is the sub-list for extension type_name
-	19, // [19:19] is the sub-list for extension extendee
-	0,  // [0:19] is the sub-list for field type_name
+	13, // 8: kubling.provider.v1.Literal.declared_type:type_name -> kubling.v1.TypeDescriptor
+	0,  // 9: kubling.provider.v1.ComparisonExpression.operator:type_name -> kubling.provider.v1.ComparisonOperator
+	4,  // 10: kubling.provider.v1.ComparisonExpression.left:type_name -> kubling.provider.v1.Expression
+	4,  // 11: kubling.provider.v1.ComparisonExpression.right:type_name -> kubling.provider.v1.Expression
+	1,  // 12: kubling.provider.v1.LogicalExpression.operator:type_name -> kubling.provider.v1.LogicalOperator
+	4,  // 13: kubling.provider.v1.LogicalExpression.operands:type_name -> kubling.provider.v1.Expression
+	2,  // 14: kubling.provider.v1.NullPredicate.operator:type_name -> kubling.provider.v1.NullPredicateOperator
+	4,  // 15: kubling.provider.v1.NullPredicate.expression:type_name -> kubling.provider.v1.Expression
+	3,  // 16: kubling.provider.v1.PatternExpression.operator:type_name -> kubling.provider.v1.PatternOperator
+	4,  // 17: kubling.provider.v1.PatternExpression.value:type_name -> kubling.provider.v1.Expression
+	4,  // 18: kubling.provider.v1.PatternExpression.pattern:type_name -> kubling.provider.v1.Expression
+	4,  // 19: kubling.provider.v1.FunctionCall.arguments:type_name -> kubling.provider.v1.Expression
+	20, // [20:20] is the sub-list for method output_type
+	20, // [20:20] is the sub-list for method input_type
+	20, // [20:20] is the sub-list for extension type_name
+	20, // [20:20] is the sub-list for extension extendee
+	0,  // [0:20] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_expression_proto_init() }

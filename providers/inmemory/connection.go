@@ -14,12 +14,18 @@ type Connection struct {
 	mu     sync.RWMutex
 	store  *store
 	closed bool
+
+	lobMu sync.Mutex
+	lobs  map[string]inMemoryLob
 }
 
 // Close releases the logical connection.
 func (c *Connection) Close(context.Context) error {
 	c.mu.Lock()
 	c.closed = true
+	c.lobMu.Lock()
+	clear(c.lobs)
+	c.lobMu.Unlock()
 	c.mu.Unlock()
 
 	return nil
@@ -70,4 +76,7 @@ func transactionsUnsupportedError() error {
 	)
 }
 
-var _ providersdk.Connection = (*Connection)(nil)
+var (
+	_ providersdk.Connection    = (*Connection)(nil)
+	_ providersdk.LobConnection = (*Connection)(nil)
+)

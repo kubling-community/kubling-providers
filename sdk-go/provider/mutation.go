@@ -4,6 +4,8 @@ import (
 	"context"
 
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -18,6 +20,13 @@ func (s *Server) Insert(
 		return nil, err
 	}
 	defer release()
+	if err := validateInputBatchStructure(request.GetRows()); err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"insert contains an invalid value: %v",
+			err,
+		)
+	}
 
 	providerRequest :=
 		proto.Clone(request).(*providerv1.InsertRequest)
@@ -30,6 +39,26 @@ func (s *Server) Insert(
 
 	if response == nil {
 		return &providerv1.InsertResponse{}, nil
+	}
+	_, lobTransportAvailable := connection.(LobConnection)
+	if err := validateOutputBatchFeatures(
+		response.GetGeneratedValues(),
+		request.GetAcceptedFeatures(),
+		lobTransportAvailable,
+	); err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			"provider returned an unsupported generated value: %v",
+			err,
+		)
+	}
+	preparedValues := prepareOutputBatch(
+		response.GetGeneratedValues(),
+		request.GetConnectionId(),
+	)
+	if preparedValues != response.GetGeneratedValues() {
+		response = proto.Clone(response).(*providerv1.InsertResponse)
+		response.GeneratedValues = preparedValues
 	}
 
 	return response, nil
@@ -46,6 +75,27 @@ func (s *Server) Update(
 		return nil, err
 	}
 	defer release()
+
+	for assignmentIndex, assignment := range request.GetAssignments() {
+		if assignment == nil {
+			continue
+		}
+		if err := validateExpressionValues(assignment.GetValue()); err != nil {
+			return nil, status.Errorf(
+				codes.InvalidArgument,
+				"update assignment %d contains an invalid value: %v",
+				assignmentIndex,
+				err,
+			)
+		}
+	}
+	if err := validateExpressionValues(request.GetFilter()); err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"update filter contains an invalid value: %v",
+			err,
+		)
+	}
 
 	providerRequest :=
 		proto.Clone(request).(*providerv1.UpdateRequest)
@@ -74,6 +124,14 @@ func (s *Server) Delete(
 		return nil, err
 	}
 	defer release()
+
+	if err := validateExpressionValues(request.GetFilter()); err != nil {
+		return nil, status.Errorf(
+			codes.InvalidArgument,
+			"delete filter contains an invalid value: %v",
+			err,
+		)
+	}
 
 	providerRequest :=
 		proto.Clone(request).(*providerv1.DeleteRequest)

@@ -69,6 +69,13 @@ func (s *Server) GetCapabilities(
 			"provider returned nil capabilities",
 		)
 	}
+	if err := validateProviderCapabilities(response); err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			"provider returned invalid capabilities: %v",
+			err,
+		)
+	}
 
 	return response, nil
 }

@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package kubling.provider.v1;
+
+option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
+option java_multiple_files = true;
+option java_outer_classname = "LobProto";
+option java_package = "com.kubling.provider.grpc";
+
+// Reads an immutable provider-owned LOB through an open logical connection.
+//
+// Kubling must materialize the complete provider LOB into its own LOB store and
+// mint a new client-facing reference. Provider identifiers and references must
+// never be forwarded to an external Kubling client.
+message ReadLobRequest {
+  string connection_id = 1;
+  string lob_id = 2;
+  uint64 offset = 3;
+
+  // Absent reads to the end; zero requests an empty completed range.
+  optional uint64 length = 4;
+
+  // Zero uses the provider default; otherwise an upper bound in payload bytes.
+  uint32 max_chunk_bytes = 5;
+}
+
+// One contiguous chunk of a provider-owned LOB.
+message ReadLobResponse {
+  uint64 offset = 1;
+  bytes data = 2;
+
+  // Exactly the last response marks the requested range complete, including
+  // empty ranges. Final gRPC OK is also required for a complete read.
+  bool end_of_read = 3;
+}
+
+// Releases a provider-owned LOB reference.
+message ReleaseLobRequest {
+  string connection_id = 1;
+  string lob_id = 2;
+}
+
+// Releasing an already released or expired reference is a successful no-op.
+message ReleaseLobResponse {}

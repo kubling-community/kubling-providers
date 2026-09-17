@@ -2,7 +2,7 @@ module github.com/kubling-community/kubling-providers/testing
 
 go 1.26.0
 
-require github.com/kubling-community/kubling-grpc/sdk-go v0.1.1
+require github.com/kubling-community/kubling-grpc/sdk-go v1.1.1
 
 require (
 	golang.org/x/net v0.55.0 // indirect

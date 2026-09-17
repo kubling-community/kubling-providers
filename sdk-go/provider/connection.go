@@ -56,3 +56,24 @@ type ResultStream interface {
 	Next(context.Context) (*providerv1.TupleBatch, error)
 	Close() error
 }
+
+// LobConnection may be implemented by a Connection that exposes immutable,
+// provider-owned LOB references. Kubling consumes these references through the
+// SDK and must replace them with client-facing references from its own LOB
+// store.
+type LobConnection interface {
+	ReadLob(
+		context.Context,
+		*providerv1.ReadLobRequest,
+	) (LobStream, error)
+	ReleaseLob(context.Context, *providerv1.ReleaseLobRequest) error
+}
+
+// LobStream produces a contiguous sequence of LOB chunks.
+//
+// Next returns io.EOF only after a response with end_of_read=true has been
+// delivered. Close must release any source resources held by the read.
+type LobStream interface {
+	Next(context.Context) (*providerv1.ReadLobResponse, error)
+	Close() error
+}

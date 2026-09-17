@@ -376,6 +376,9 @@ func normalizeColumn(column ColumnConfig, allowNullable bool) (ColumnConfig, err
 	if normalized.Type == kublingv1.ValueType_VALUE_TYPE_UNKNOWN {
 		return ColumnConfig{}, errors.New("type is required")
 	}
+	if !columnTypeSupported(normalized.Type) {
+		return ColumnConfig{}, fmt.Errorf("type %s is not supported", normalized.Type)
+	}
 	if !allowNullable {
 		normalized.Nullable = false
 		normalized.Updatable = false
@@ -394,10 +397,40 @@ func parseValueType(value string) (kublingv1.ValueType, error) {
 		normalized = alias
 	}
 	parsed, exists := kublingv1.ValueType_value["VALUE_TYPE_"+normalized]
-	if !exists || parsed == int32(kublingv1.ValueType_VALUE_TYPE_UNKNOWN) {
+	valueType := kublingv1.ValueType(parsed)
+	if !exists || !columnTypeSupported(valueType) {
 		return kublingv1.ValueType_VALUE_TYPE_UNKNOWN, fmt.Errorf("unsupported Kubling type %q", value)
 	}
-	return kublingv1.ValueType(parsed), nil
+	return valueType, nil
+}
+
+func columnTypeSupported(valueType kublingv1.ValueType) bool {
+	switch valueType {
+	case kublingv1.ValueType_VALUE_TYPE_STRING,
+		kublingv1.ValueType_VALUE_TYPE_VARBINARY,
+		kublingv1.ValueType_VALUE_TYPE_CHAR,
+		kublingv1.ValueType_VALUE_TYPE_BOOLEAN,
+		kublingv1.ValueType_VALUE_TYPE_BYTE,
+		kublingv1.ValueType_VALUE_TYPE_SHORT,
+		kublingv1.ValueType_VALUE_TYPE_INTEGER,
+		kublingv1.ValueType_VALUE_TYPE_LONG,
+		kublingv1.ValueType_VALUE_TYPE_BIGINTEGER,
+		kublingv1.ValueType_VALUE_TYPE_FLOAT,
+		kublingv1.ValueType_VALUE_TYPE_DOUBLE,
+		kublingv1.ValueType_VALUE_TYPE_BIGDECIMAL,
+		kublingv1.ValueType_VALUE_TYPE_DATE,
+		kublingv1.ValueType_VALUE_TYPE_TIME,
+		kublingv1.ValueType_VALUE_TYPE_TIMESTAMP,
+		kublingv1.ValueType_VALUE_TYPE_BLOB,
+		kublingv1.ValueType_VALUE_TYPE_CLOB,
+		kublingv1.ValueType_VALUE_TYPE_GEOMETRY,
+		kublingv1.ValueType_VALUE_TYPE_GEOGRAPHY,
+		kublingv1.ValueType_VALUE_TYPE_JSON,
+		kublingv1.ValueType_VALUE_TYPE_XML:
+		return true
+	default:
+		return false
+	}
 }
 
 func keyTypeSupported(valueType kublingv1.ValueType) bool {

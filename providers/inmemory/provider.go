@@ -3,7 +3,10 @@ package inmemory
 import (
 	"context"
 	_ "embed"
+	"time"
 
+	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 )
@@ -25,6 +28,10 @@ func New() *Provider {
 func (p *Provider) Capabilities(
 	context.Context,
 ) (*providersdk.Capabilities, error) {
+	maxArrayDimensions := uint32(1)
+	maxLobChunkBytes := uint32(inMemoryMaxLobChunkBytes)
+	maxLobBytes := uint64(inMemoryMaxLobBytes)
+	lobRetentionSeconds := uint64(inMemoryLobRetention / time.Second)
 	return &providersdk.Capabilities{
 		Transactions: &providerv1.TransactionCapabilities{
 			Supported: false,
@@ -66,7 +73,36 @@ func (p *Provider) Capabilities(
 			Delete:          true,
 			GeneratedValues: true,
 		},
+		Values: &providerv1.ValueCapabilities{
+			SupportedTypes: supportedValueTypes(),
+			Features: []string{
+				grpcfeatures.ArrayValuesV1,
+				grpcfeatures.SpatialValuesV1,
+				grpcfeatures.LobReadV1,
+			},
+			MaxArrayDimensions:           &maxArrayDimensions,
+			MaxLobChunkBytes:             &maxLobChunkBytes,
+			MaxLobBytes:                  &maxLobBytes,
+			LobReferenceRetentionSeconds: &lobRetentionSeconds,
+		},
 	}, nil
+}
+
+func supportedValueTypes() []*providerv1.SupportedValueType {
+	types := make(
+		[]*providerv1.SupportedValueType,
+		0,
+		int(kublingv1.ValueType_VALUE_TYPE_ARRAY),
+	)
+	for valueType := kublingv1.ValueType_VALUE_TYPE_STRING; valueType <= kublingv1.ValueType_VALUE_TYPE_ARRAY; valueType++ {
+		types = append(types, &providerv1.SupportedValueType{
+			Type:   valueType,
+			Input:  true,
+			Output: true,
+		})
+	}
+
+	return types
 }
 
 // Health reports whether the in-memory provider is ready to serve requests.
@@ -90,6 +126,7 @@ func (p *Provider) Open(
 ) (providersdk.Connection, error) {
 	return &Connection{
 		store: p.store,
+		lobs:  make(map[string]inMemoryLob),
 	}, nil
 }
 

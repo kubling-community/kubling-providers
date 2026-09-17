@@ -654,7 +654,10 @@ type ColumnMetadata struct {
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
 	// Native source name when it differs from the logical name.
 	SourceName string `protobuf:"bytes,2,opt,name=source_name,json=sourceName,proto3" json:"source_name,omitempty"`
-	// Canonical Kubling type used for transport and planning.
+	// Top-level canonical Kubling type used for transport and planning.
+	//
+	// Retained for compatibility with consumers that predate type_descriptor.
+	// When type_descriptor is present, this value must match its type.
 	Type v1.ValueType `protobuf:"varint,3,opt,name=type,proto3,enum=kubling.v1.ValueType" json:"type,omitempty"`
 	// Native source type retained for diagnostics and provider-specific logic.
 	NativeType      string `protobuf:"bytes,4,opt,name=native_type,json=nativeType,proto3" json:"native_type,omitempty"`
@@ -677,9 +680,16 @@ type ColumnMetadata struct {
 	//
 	// Providers declare the ordered logical source columns. Kubling owns value
 	// generation and never projects or mutates this column through the provider.
-	StableKey     *StableKeyMetadata `protobuf:"bytes,15,opt,name=stable_key,json=stableKey,proto3" json:"stable_key,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	StableKey *StableKeyMetadata `protobuf:"bytes,15,opt,name=stable_key,json=stableKey,proto3" json:"stable_key,omitempty"`
+	// Complete logical type used for transport and planning.
+	//
+	// Providers must set this for ARRAY columns so recursive element types remain
+	// available independently of individual values. Non-array providers may omit
+	// it while compatibility with the legacy type field is required. When both
+	// representations carry precision or scale, their values must also match.
+	TypeDescriptor *v1.TypeDescriptor `protobuf:"bytes,16,opt,name=type_descriptor,json=typeDescriptor,proto3" json:"type_descriptor,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *ColumnMetadata) Reset() {
@@ -813,6 +823,13 @@ func (x *ColumnMetadata) GetProperties() map[string]string {
 func (x *ColumnMetadata) GetStableKey() *StableKeyMetadata {
 	if x != nil {
 		return x.StableKey
+	}
+	return nil
+}
+
+func (x *ColumnMetadata) GetTypeDescriptor() *v1.TypeDescriptor {
+	if x != nil {
+		return x.TypeDescriptor
 	}
 	return nil
 }
@@ -1492,7 +1509,7 @@ const file_kubling_provider_v1_metadata_proto_rawDesc = "" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\f\n" +
 	"\n" +
-	"_updatable\"\xad\x06\n" +
+	"_updatable\"\xf2\x06\n" +
 	"\x0eColumnMetadata\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\vsource_name\x18\x02 \x01(\tR\n" +
@@ -1516,7 +1533,8 @@ const file_kubling_provider_v1_metadata_proto_rawDesc = "" +
 	"properties\x18\x0e \x03(\v23.kubling.provider.v1.ColumnMetadata.PropertiesEntryR\n" +
 	"properties\x12E\n" +
 	"\n" +
-	"stable_key\x18\x0f \x01(\v2&.kubling.provider.v1.StableKeyMetadataR\tstableKey\x1a=\n" +
+	"stable_key\x18\x0f \x01(\v2&.kubling.provider.v1.StableKeyMetadataR\tstableKey\x12C\n" +
+	"\x0ftype_descriptor\x18\x10 \x01(\v2\x1a.kubling.v1.TypeDescriptorR\x0etypeDescriptor\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\v\n" +
@@ -1655,6 +1673,7 @@ var file_kubling_provider_v1_metadata_proto_goTypes = []any{
 	nil,                               // 23: kubling.provider.v1.ColumnMetadata.PropertiesEntry
 	nil,                               // 24: kubling.provider.v1.KeyMetadata.PropertiesEntry
 	(v1.ValueType)(0),                 // 25: kubling.v1.ValueType
+	(*v1.TypeDescriptor)(nil),         // 26: kubling.v1.TypeDescriptor
 }
 var file_kubling_provider_v1_metadata_proto_depIdxs = []int32{
 	9,  // 0: kubling.provider.v1.SchemaMetadata.tables:type_name -> kubling.provider.v1.TableMetadata
@@ -1670,23 +1689,24 @@ var file_kubling_provider_v1_metadata_proto_depIdxs = []int32{
 	2,  // 10: kubling.provider.v1.ColumnMetadata.searchability:type_name -> kubling.provider.v1.ColumnSearchability
 	23, // 11: kubling.provider.v1.ColumnMetadata.properties:type_name -> kubling.provider.v1.ColumnMetadata.PropertiesEntry
 	11, // 12: kubling.provider.v1.ColumnMetadata.stable_key:type_name -> kubling.provider.v1.StableKeyMetadata
-	3,  // 13: kubling.provider.v1.StableKeyMetadata.format:type_name -> kubling.provider.v1.StableKeyFormat
-	13, // 14: kubling.provider.v1.SyntheticTableMetadata.parent:type_name -> kubling.provider.v1.TableReference
-	4,  // 15: kubling.provider.v1.SyntheticTableMetadata.cardinality:type_name -> kubling.provider.v1.SyntheticCardinality
-	14, // 16: kubling.provider.v1.SyntheticTableMetadata.column_bindings:type_name -> kubling.provider.v1.SyntheticColumnBinding
-	18, // 17: kubling.provider.v1.SyntheticTableMetadata.mutations:type_name -> kubling.provider.v1.SyntheticMutationMetadata
-	15, // 18: kubling.provider.v1.SyntheticColumnBinding.document:type_name -> kubling.provider.v1.DocumentColumnBinding
-	16, // 19: kubling.provider.v1.SyntheticColumnBinding.parent:type_name -> kubling.provider.v1.ParentColumnBinding
-	17, // 20: kubling.provider.v1.SyntheticColumnBinding.ordinality:type_name -> kubling.provider.v1.OrdinalityColumnBinding
-	5,  // 21: kubling.provider.v1.ParentColumnBinding.scope:type_name -> kubling.provider.v1.ParentColumnScope
-	6,  // 22: kubling.provider.v1.SyntheticMutationMetadata.strategy:type_name -> kubling.provider.v1.SyntheticMutationStrategy
-	1,  // 23: kubling.provider.v1.KeyMetadata.kind:type_name -> kubling.provider.v1.KeyKind
-	24, // 24: kubling.provider.v1.KeyMetadata.properties:type_name -> kubling.provider.v1.KeyMetadata.PropertiesEntry
-	25, // [25:25] is the sub-list for method output_type
-	25, // [25:25] is the sub-list for method input_type
-	25, // [25:25] is the sub-list for extension type_name
-	25, // [25:25] is the sub-list for extension extendee
-	0,  // [0:25] is the sub-list for field type_name
+	26, // 13: kubling.provider.v1.ColumnMetadata.type_descriptor:type_name -> kubling.v1.TypeDescriptor
+	3,  // 14: kubling.provider.v1.StableKeyMetadata.format:type_name -> kubling.provider.v1.StableKeyFormat
+	13, // 15: kubling.provider.v1.SyntheticTableMetadata.parent:type_name -> kubling.provider.v1.TableReference
+	4,  // 16: kubling.provider.v1.SyntheticTableMetadata.cardinality:type_name -> kubling.provider.v1.SyntheticCardinality
+	14, // 17: kubling.provider.v1.SyntheticTableMetadata.column_bindings:type_name -> kubling.provider.v1.SyntheticColumnBinding
+	18, // 18: kubling.provider.v1.SyntheticTableMetadata.mutations:type_name -> kubling.provider.v1.SyntheticMutationMetadata
+	15, // 19: kubling.provider.v1.SyntheticColumnBinding.document:type_name -> kubling.provider.v1.DocumentColumnBinding
+	16, // 20: kubling.provider.v1.SyntheticColumnBinding.parent:type_name -> kubling.provider.v1.ParentColumnBinding
+	17, // 21: kubling.provider.v1.SyntheticColumnBinding.ordinality:type_name -> kubling.provider.v1.OrdinalityColumnBinding
+	5,  // 22: kubling.provider.v1.ParentColumnBinding.scope:type_name -> kubling.provider.v1.ParentColumnScope
+	6,  // 23: kubling.provider.v1.SyntheticMutationMetadata.strategy:type_name -> kubling.provider.v1.SyntheticMutationStrategy
+	1,  // 24: kubling.provider.v1.KeyMetadata.kind:type_name -> kubling.provider.v1.KeyKind
+	24, // 25: kubling.provider.v1.KeyMetadata.properties:type_name -> kubling.provider.v1.KeyMetadata.PropertiesEntry
+	26, // [26:26] is the sub-list for method output_type
+	26, // [26:26] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_metadata_proto_init() }

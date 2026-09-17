@@ -90,7 +90,10 @@ message ColumnMetadata {
   // Native source name when it differs from the logical name.
   string source_name = 2;
 
-  // Canonical Kubling type used for transport and planning.
+  // Top-level canonical Kubling type used for transport and planning.
+  //
+  // Retained for compatibility with consumers that predate type_descriptor.
+  // When type_descriptor is present, this value must match its type.
   kubling.v1.ValueType type = 3;
 
   // Native source type retained for diagnostics and provider-specific logic.
@@ -121,6 +124,14 @@ message ColumnMetadata {
   // Providers declare the ordered logical source columns. Kubling owns value
   // generation and never projects or mutates this column through the provider.
   StableKeyMetadata stable_key = 15;
+
+  // Complete logical type used for transport and planning.
+  //
+  // Providers must set this for ARRAY columns so recursive element types remain
+  // available independently of individual values. Non-array providers may omit
+  // it while compatibility with the legacy type field is required. When both
+  // representations carry precision or scale, their values must also match.
+  kubling.v1.TypeDescriptor type_descriptor = 16;
 }
 
 // Ordered source columns used by Kubling to generate a stable row key.

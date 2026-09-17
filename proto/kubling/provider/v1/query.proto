@@ -50,6 +50,12 @@ message QueryRequest {
   // This is a hint. When absent, the provider chooses an appropriate
   // batch size.
   optional uint32 batch_size = 8;
+
+  // Optional value representations Kubling accepts in QueryResponse.
+  //
+  // Providers must not emit an optional representation unless its canonical
+  // feature name appears here, even when the provider advertises support.
+  repeated string accepted_features = 9;
 }
 
 // Logical entity exposed through the Kubling model.

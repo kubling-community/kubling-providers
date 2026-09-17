@@ -66,6 +66,7 @@ CREATE FOREIGN TABLE TYPE_SAMPLE
     byte_value byte NOT NULL OPTIONS(ANNOTATION 'Example signed 8-bit integer'),
     short_value short NOT NULL OPTIONS(ANNOTATION 'Example signed 16-bit integer'),
     integer_value integer NOT NULL OPTIONS(ANNOTATION 'Example signed 32-bit integer'),
+    integer_array_value integer[] NOT NULL OPTIONS(ANNOTATION 'Example array with nullable signed 32-bit integer elements'),
     long_value long NOT NULL OPTIONS(ANNOTATION 'Example signed 64-bit integer'),
     biginteger_value biginteger NOT NULL OPTIONS(ANNOTATION 'Example arbitrary precision integer'),
     float_value float NOT NULL OPTIONS(ANNOTATION 'Example 32-bit floating-point number'),

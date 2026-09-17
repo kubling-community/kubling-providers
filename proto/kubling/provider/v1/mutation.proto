@@ -29,6 +29,12 @@ message InsertRequest {
   //
   // When empty, no generated values are requested.
   repeated string returning_fields = 4;
+
+  // Optional value representations Kubling accepts in generated_values.
+  //
+  // Providers must not emit an optional representation unless its canonical
+  // feature name appears here, even when the provider advertises support.
+  repeated string accepted_features = 5;
 }
 
 // Result of an insert operation.

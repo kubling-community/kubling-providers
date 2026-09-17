@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"google.golang.org/protobuf/proto"
@@ -126,6 +127,11 @@ func (s *recordingStream) Next(
 		return nil, nil
 	}
 
+	if s.cacheable && batchContainsLobReference(batch) {
+		s.cacheable = false
+		s.batches = nil
+		s.size = 0
+	}
 	if s.cacheable {
 		cloned := proto.Clone(batch).(*providerv1.TupleBatch)
 		size := int64(proto.Size(cloned))
@@ -140,6 +146,33 @@ func (s *recordingStream) Next(
 	}
 
 	return batch, nil
+}
+
+func batchContainsLobReference(batch *providerv1.TupleBatch) bool {
+	for _, tuple := range batch.GetTuples() {
+		for _, value := range tuple.GetValues() {
+			if valueContainsLobReference(value) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func valueContainsLobReference(value *kublingv1.Value) bool {
+	switch typed := value.GetKind().(type) {
+	case *kublingv1.Value_LobReference:
+		return true
+	case *kublingv1.Value_ArrayValue:
+		for _, element := range typed.ArrayValue.GetElements() {
+			if valueContainsLobReference(element) {
+				return true
+			}
+		}
+	}
+
+	return false
 }
 
 func (s *recordingStream) Close() error {

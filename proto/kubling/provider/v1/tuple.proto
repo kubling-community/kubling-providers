@@ -14,10 +14,18 @@ message Field {
   // Field name exposed to Kubling.
   string name = 1;
 
-  // Logical Kubling type of the field.
+  // Top-level logical Kubling type of the field.
   //
-  // This metadata also determines the logical type of null values.
+  // Retained for compatibility with consumers that predate type_descriptor.
+  // When type_descriptor is present, this value must match its type.
   kubling.v1.ValueType type = 2;
+
+  // Complete logical type of the field.
+  //
+  // Providers must set this for ARRAY fields so recursive element types remain
+  // available for empty arrays and null values. Non-array providers may omit it
+  // while compatibility with the legacy type field is required.
+  kubling.v1.TypeDescriptor type_descriptor = 3;
 }
 
 // Ordered tuple of values.

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -272,7 +273,9 @@ func mutationOperations() []mutationOperation {
 							},
 						},
 						Tuples: []*providerv1.Tuple{
-							{},
+							{Values: []*kublingv1.Value{{
+								Kind: &kublingv1.Value_StringValue{StringValue: "value"},
+							}}},
 						},
 					},
 					ReturningFields: []string{"id"},
@@ -288,6 +291,7 @@ func mutationOperations() []mutationOperation {
 						Fields: []*providerv1.Field{
 							{
 								Name: "id",
+								Type: kublingv1.ValueType_VALUE_TYPE_STRING,
 							},
 						},
 					},

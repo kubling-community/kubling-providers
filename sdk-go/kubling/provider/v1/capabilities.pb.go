@@ -7,6 +7,7 @@
 package providerv1
 
 import (
+	v1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	reflect "reflect"
@@ -168,6 +169,7 @@ type GetCapabilitiesResponse struct {
 	Transactions  *TransactionCapabilities `protobuf:"bytes,1,opt,name=transactions,proto3" json:"transactions,omitempty"`
 	Query         *QueryCapabilities       `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
 	Mutations     *MutationCapabilities    `protobuf:"bytes,3,opt,name=mutations,proto3" json:"mutations,omitempty"`
+	Values        *ValueCapabilities       `protobuf:"bytes,4,opt,name=values,proto3" json:"values,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -223,6 +225,175 @@ func (x *GetCapabilitiesResponse) GetMutations() *MutationCapabilities {
 	return nil
 }
 
+func (x *GetCapabilitiesResponse) GetValues() *ValueCapabilities {
+	if x != nil {
+		return x.Values
+	}
+	return nil
+}
+
+// Value representations supported by the provider server.
+type ValueCapabilities struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Logical types supported in requests and responses.
+	SupportedTypes []*SupportedValueType `protobuf:"bytes,1,rep,name=supported_types,json=supportedTypes,proto3" json:"supported_types,omitempty"`
+	// Canonical representation features supported by the provider.
+	//
+	// Names use the shared Kubling feature registry, including array_values_v1
+	// and spatial_values_v1. Advertising a feature does not permit a provider to
+	// emit it unless the individual request also accepts it.
+	Features []string `protobuf:"bytes,2,rep,name=features,proto3" json:"features,omitempty"`
+	// Maximum supported ARRAY nesting depth.
+	//
+	// Required and positive when array_values_v1 is advertised.
+	MaxArrayDimensions *uint32 `protobuf:"varint,3,opt,name=max_array_dimensions,json=maxArrayDimensions,proto3,oneof" json:"max_array_dimensions,omitempty"`
+	// Maximum payload bytes per ReadLob response.
+	//
+	// Required and positive when lob_read_v1 is advertised.
+	MaxLobChunkBytes *uint32 `protobuf:"varint,4,opt,name=max_lob_chunk_bytes,json=maxLobChunkBytes,proto3,oneof" json:"max_lob_chunk_bytes,omitempty"`
+	// Maximum payload bytes represented by a newly issued provider LOB
+	// reference. Required and positive when lob_read_v1 is advertised.
+	MaxLobBytes *uint64 `protobuf:"varint,5,opt,name=max_lob_bytes,json=maxLobBytes,proto3,oneof" json:"max_lob_bytes,omitempty"`
+	// Positive minimum lifetime, in seconds, of a newly issued provider LOB
+	// reference. Required when lob_read_v1 is advertised.
+	LobReferenceRetentionSeconds *uint64 `protobuf:"varint,6,opt,name=lob_reference_retention_seconds,json=lobReferenceRetentionSeconds,proto3,oneof" json:"lob_reference_retention_seconds,omitempty"`
+	unknownFields                protoimpl.UnknownFields
+	sizeCache                    protoimpl.SizeCache
+}
+
+func (x *ValueCapabilities) Reset() {
+	*x = ValueCapabilities{}
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ValueCapabilities) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ValueCapabilities) ProtoMessage() {}
+
+func (x *ValueCapabilities) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ValueCapabilities.ProtoReflect.Descriptor instead.
+func (*ValueCapabilities) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *ValueCapabilities) GetSupportedTypes() []*SupportedValueType {
+	if x != nil {
+		return x.SupportedTypes
+	}
+	return nil
+}
+
+func (x *ValueCapabilities) GetFeatures() []string {
+	if x != nil {
+		return x.Features
+	}
+	return nil
+}
+
+func (x *ValueCapabilities) GetMaxArrayDimensions() uint32 {
+	if x != nil && x.MaxArrayDimensions != nil {
+		return *x.MaxArrayDimensions
+	}
+	return 0
+}
+
+func (x *ValueCapabilities) GetMaxLobChunkBytes() uint32 {
+	if x != nil && x.MaxLobChunkBytes != nil {
+		return *x.MaxLobChunkBytes
+	}
+	return 0
+}
+
+func (x *ValueCapabilities) GetMaxLobBytes() uint64 {
+	if x != nil && x.MaxLobBytes != nil {
+		return *x.MaxLobBytes
+	}
+	return 0
+}
+
+func (x *ValueCapabilities) GetLobReferenceRetentionSeconds() uint64 {
+	if x != nil && x.LobReferenceRetentionSeconds != nil {
+		return *x.LobReferenceRetentionSeconds
+	}
+	return 0
+}
+
+// Directional support for one logical Kubling type.
+type SupportedValueType struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Type          v1.ValueType           `protobuf:"varint,1,opt,name=type,proto3,enum=kubling.v1.ValueType" json:"type,omitempty"`
+	Input         bool                   `protobuf:"varint,2,opt,name=input,proto3" json:"input,omitempty"`
+	Output        bool                   `protobuf:"varint,3,opt,name=output,proto3" json:"output,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SupportedValueType) Reset() {
+	*x = SupportedValueType{}
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SupportedValueType) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SupportedValueType) ProtoMessage() {}
+
+func (x *SupportedValueType) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SupportedValueType.ProtoReflect.Descriptor instead.
+func (*SupportedValueType) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SupportedValueType) GetType() v1.ValueType {
+	if x != nil {
+		return x.Type
+	}
+	return v1.ValueType(0)
+}
+
+func (x *SupportedValueType) GetInput() bool {
+	if x != nil {
+		return x.Input
+	}
+	return false
+}
+
+func (x *SupportedValueType) GetOutput() bool {
+	if x != nil {
+		return x.Output
+	}
+	return false
+}
+
 // Schema definition exposed by the provider server.
 type GetSchemaResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -243,7 +414,7 @@ type GetSchemaResponse struct {
 
 func (x *GetSchemaResponse) Reset() {
 	*x = GetSchemaResponse{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[3]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -255,7 +426,7 @@ func (x *GetSchemaResponse) String() string {
 func (*GetSchemaResponse) ProtoMessage() {}
 
 func (x *GetSchemaResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[3]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -268,7 +439,7 @@ func (x *GetSchemaResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetSchemaResponse.ProtoReflect.Descriptor instead.
 func (*GetSchemaResponse) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{3}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GetSchemaResponse) GetSchemaDdl() string {
@@ -299,7 +470,7 @@ type TransactionCapabilities struct {
 
 func (x *TransactionCapabilities) Reset() {
 	*x = TransactionCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[4]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -311,7 +482,7 @@ func (x *TransactionCapabilities) String() string {
 func (*TransactionCapabilities) ProtoMessage() {}
 
 func (x *TransactionCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[4]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -324,7 +495,7 @@ func (x *TransactionCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TransactionCapabilities.ProtoReflect.Descriptor instead.
 func (*TransactionCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{4}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *TransactionCapabilities) GetSupported() bool {
@@ -359,7 +530,7 @@ type QueryCapabilities struct {
 
 func (x *QueryCapabilities) Reset() {
 	*x = QueryCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[5]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -371,7 +542,7 @@ func (x *QueryCapabilities) String() string {
 func (*QueryCapabilities) ProtoMessage() {}
 
 func (x *QueryCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[5]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -384,7 +555,7 @@ func (x *QueryCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryCapabilities.ProtoReflect.Descriptor instead.
 func (*QueryCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{5}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *QueryCapabilities) GetRequiresCriteria() bool {
@@ -442,7 +613,7 @@ type ExpressionCapabilities struct {
 
 func (x *ExpressionCapabilities) Reset() {
 	*x = ExpressionCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[6]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -454,7 +625,7 @@ func (x *ExpressionCapabilities) String() string {
 func (*ExpressionCapabilities) ProtoMessage() {}
 
 func (x *ExpressionCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[6]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -467,7 +638,7 @@ func (x *ExpressionCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ExpressionCapabilities.ProtoReflect.Descriptor instead.
 func (*ExpressionCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{6}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ExpressionCapabilities) GetComparisonOperators() []ComparisonOperator {
@@ -514,7 +685,7 @@ type OrderingCapabilities struct {
 
 func (x *OrderingCapabilities) Reset() {
 	*x = OrderingCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[7]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +697,7 @@ func (x *OrderingCapabilities) String() string {
 func (*OrderingCapabilities) ProtoMessage() {}
 
 func (x *OrderingCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[7]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +710,7 @@ func (x *OrderingCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrderingCapabilities.ProtoReflect.Descriptor instead.
 func (*OrderingCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{7}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *OrderingCapabilities) GetSupported() bool {
@@ -576,7 +747,7 @@ type PaginationCapabilities struct {
 
 func (x *PaginationCapabilities) Reset() {
 	*x = PaginationCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[8]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -588,7 +759,7 @@ func (x *PaginationCapabilities) String() string {
 func (*PaginationCapabilities) ProtoMessage() {}
 
 func (x *PaginationCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[8]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -601,7 +772,7 @@ func (x *PaginationCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PaginationCapabilities.ProtoReflect.Descriptor instead.
 func (*PaginationCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{8}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *PaginationCapabilities) GetLimit() bool {
@@ -635,7 +806,7 @@ type MutationCapabilities struct {
 
 func (x *MutationCapabilities) Reset() {
 	*x = MutationCapabilities{}
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[9]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -647,7 +818,7 @@ func (x *MutationCapabilities) String() string {
 func (*MutationCapabilities) ProtoMessage() {}
 
 func (x *MutationCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[9]
+	mi := &file_kubling_provider_v1_capabilities_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -660,7 +831,7 @@ func (x *MutationCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MutationCapabilities.ProtoReflect.Descriptor instead.
 func (*MutationCapabilities) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{9}
+	return file_kubling_provider_v1_capabilities_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *MutationCapabilities) GetInsert() bool {
@@ -695,13 +866,29 @@ var File_kubling_provider_v1_capabilities_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_capabilities_proto_rawDesc = "" +
 	"\n" +
-	"&kubling/provider/v1/capabilities.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\"kubling/provider/v1/metadata.proto\"\x18\n" +
+	"&kubling/provider/v1/capabilities.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\"kubling/provider/v1/metadata.proto\x1a\x16kubling/v1/value.proto\"\x18\n" +
 	"\x16GetCapabilitiesRequest\"\x12\n" +
-	"\x10GetSchemaRequest\"\xf2\x01\n" +
+	"\x10GetSchemaRequest\"\xb2\x02\n" +
 	"\x17GetCapabilitiesResponse\x12P\n" +
 	"\ftransactions\x18\x01 \x01(\v2,.kubling.provider.v1.TransactionCapabilitiesR\ftransactions\x12<\n" +
 	"\x05query\x18\x02 \x01(\v2&.kubling.provider.v1.QueryCapabilitiesR\x05query\x12G\n" +
-	"\tmutations\x18\x03 \x01(\v2).kubling.provider.v1.MutationCapabilitiesR\tmutations\"s\n" +
+	"\tmutations\x18\x03 \x01(\v2).kubling.provider.v1.MutationCapabilitiesR\tmutations\x12>\n" +
+	"\x06values\x18\x04 \x01(\v2&.kubling.provider.v1.ValueCapabilitiesR\x06values\"\xc8\x03\n" +
+	"\x11ValueCapabilities\x12P\n" +
+	"\x0fsupported_types\x18\x01 \x03(\v2'.kubling.provider.v1.SupportedValueTypeR\x0esupportedTypes\x12\x1a\n" +
+	"\bfeatures\x18\x02 \x03(\tR\bfeatures\x125\n" +
+	"\x14max_array_dimensions\x18\x03 \x01(\rH\x00R\x12maxArrayDimensions\x88\x01\x01\x122\n" +
+	"\x13max_lob_chunk_bytes\x18\x04 \x01(\rH\x01R\x10maxLobChunkBytes\x88\x01\x01\x12'\n" +
+	"\rmax_lob_bytes\x18\x05 \x01(\x04H\x02R\vmaxLobBytes\x88\x01\x01\x12J\n" +
+	"\x1flob_reference_retention_seconds\x18\x06 \x01(\x04H\x03R\x1clobReferenceRetentionSeconds\x88\x01\x01B\x17\n" +
+	"\x15_max_array_dimensionsB\x16\n" +
+	"\x14_max_lob_chunk_bytesB\x10\n" +
+	"\x0e_max_lob_bytesB\"\n" +
+	" _lob_reference_retention_seconds\"m\n" +
+	"\x12SupportedValueType\x12)\n" +
+	"\x04type\x18\x01 \x01(\x0e2\x15.kubling.v1.ValueTypeR\x04type\x12\x14\n" +
+	"\x05input\x18\x02 \x01(\bR\x05input\x12\x16\n" +
+	"\x06output\x18\x03 \x01(\bR\x06output\"s\n" +
 	"\x11GetSchemaResponse\x12\x1d\n" +
 	"\n" +
 	"schema_ddl\x18\x01 \x01(\tR\tschemaDdl\x12?\n" +
@@ -755,43 +942,49 @@ func file_kubling_provider_v1_capabilities_proto_rawDescGZIP() []byte {
 }
 
 var file_kubling_provider_v1_capabilities_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_kubling_provider_v1_capabilities_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_kubling_provider_v1_capabilities_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_kubling_provider_v1_capabilities_proto_goTypes = []any{
 	(DefaultNullOrder)(0),           // 0: kubling.provider.v1.DefaultNullOrder
 	(*GetCapabilitiesRequest)(nil),  // 1: kubling.provider.v1.GetCapabilitiesRequest
 	(*GetSchemaRequest)(nil),        // 2: kubling.provider.v1.GetSchemaRequest
 	(*GetCapabilitiesResponse)(nil), // 3: kubling.provider.v1.GetCapabilitiesResponse
-	(*GetSchemaResponse)(nil),       // 4: kubling.provider.v1.GetSchemaResponse
-	(*TransactionCapabilities)(nil), // 5: kubling.provider.v1.TransactionCapabilities
-	(*QueryCapabilities)(nil),       // 6: kubling.provider.v1.QueryCapabilities
-	(*ExpressionCapabilities)(nil),  // 7: kubling.provider.v1.ExpressionCapabilities
-	(*OrderingCapabilities)(nil),    // 8: kubling.provider.v1.OrderingCapabilities
-	(*PaginationCapabilities)(nil),  // 9: kubling.provider.v1.PaginationCapabilities
-	(*MutationCapabilities)(nil),    // 10: kubling.provider.v1.MutationCapabilities
-	(*SchemaMetadata)(nil),          // 11: kubling.provider.v1.SchemaMetadata
-	(ComparisonOperator)(0),         // 12: kubling.provider.v1.ComparisonOperator
-	(LogicalOperator)(0),            // 13: kubling.provider.v1.LogicalOperator
-	(NullPredicateOperator)(0),      // 14: kubling.provider.v1.NullPredicateOperator
-	(PatternOperator)(0),            // 15: kubling.provider.v1.PatternOperator
+	(*ValueCapabilities)(nil),       // 4: kubling.provider.v1.ValueCapabilities
+	(*SupportedValueType)(nil),      // 5: kubling.provider.v1.SupportedValueType
+	(*GetSchemaResponse)(nil),       // 6: kubling.provider.v1.GetSchemaResponse
+	(*TransactionCapabilities)(nil), // 7: kubling.provider.v1.TransactionCapabilities
+	(*QueryCapabilities)(nil),       // 8: kubling.provider.v1.QueryCapabilities
+	(*ExpressionCapabilities)(nil),  // 9: kubling.provider.v1.ExpressionCapabilities
+	(*OrderingCapabilities)(nil),    // 10: kubling.provider.v1.OrderingCapabilities
+	(*PaginationCapabilities)(nil),  // 11: kubling.provider.v1.PaginationCapabilities
+	(*MutationCapabilities)(nil),    // 12: kubling.provider.v1.MutationCapabilities
+	(v1.ValueType)(0),               // 13: kubling.v1.ValueType
+	(*SchemaMetadata)(nil),          // 14: kubling.provider.v1.SchemaMetadata
+	(ComparisonOperator)(0),         // 15: kubling.provider.v1.ComparisonOperator
+	(LogicalOperator)(0),            // 16: kubling.provider.v1.LogicalOperator
+	(NullPredicateOperator)(0),      // 17: kubling.provider.v1.NullPredicateOperator
+	(PatternOperator)(0),            // 18: kubling.provider.v1.PatternOperator
 }
 var file_kubling_provider_v1_capabilities_proto_depIdxs = []int32{
-	5,  // 0: kubling.provider.v1.GetCapabilitiesResponse.transactions:type_name -> kubling.provider.v1.TransactionCapabilities
-	6,  // 1: kubling.provider.v1.GetCapabilitiesResponse.query:type_name -> kubling.provider.v1.QueryCapabilities
-	10, // 2: kubling.provider.v1.GetCapabilitiesResponse.mutations:type_name -> kubling.provider.v1.MutationCapabilities
-	11, // 3: kubling.provider.v1.GetSchemaResponse.metadata:type_name -> kubling.provider.v1.SchemaMetadata
-	8,  // 4: kubling.provider.v1.QueryCapabilities.ordering:type_name -> kubling.provider.v1.OrderingCapabilities
-	9,  // 5: kubling.provider.v1.QueryCapabilities.pagination:type_name -> kubling.provider.v1.PaginationCapabilities
-	7,  // 6: kubling.provider.v1.QueryCapabilities.expressions:type_name -> kubling.provider.v1.ExpressionCapabilities
-	12, // 7: kubling.provider.v1.ExpressionCapabilities.comparison_operators:type_name -> kubling.provider.v1.ComparisonOperator
-	13, // 8: kubling.provider.v1.ExpressionCapabilities.logical_operators:type_name -> kubling.provider.v1.LogicalOperator
-	14, // 9: kubling.provider.v1.ExpressionCapabilities.null_predicate_operators:type_name -> kubling.provider.v1.NullPredicateOperator
-	15, // 10: kubling.provider.v1.ExpressionCapabilities.pattern_operators:type_name -> kubling.provider.v1.PatternOperator
-	0,  // 11: kubling.provider.v1.OrderingCapabilities.default_null_order:type_name -> kubling.provider.v1.DefaultNullOrder
-	12, // [12:12] is the sub-list for method output_type
-	12, // [12:12] is the sub-list for method input_type
-	12, // [12:12] is the sub-list for extension type_name
-	12, // [12:12] is the sub-list for extension extendee
-	0,  // [0:12] is the sub-list for field type_name
+	7,  // 0: kubling.provider.v1.GetCapabilitiesResponse.transactions:type_name -> kubling.provider.v1.TransactionCapabilities
+	8,  // 1: kubling.provider.v1.GetCapabilitiesResponse.query:type_name -> kubling.provider.v1.QueryCapabilities
+	12, // 2: kubling.provider.v1.GetCapabilitiesResponse.mutations:type_name -> kubling.provider.v1.MutationCapabilities
+	4,  // 3: kubling.provider.v1.GetCapabilitiesResponse.values:type_name -> kubling.provider.v1.ValueCapabilities
+	5,  // 4: kubling.provider.v1.ValueCapabilities.supported_types:type_name -> kubling.provider.v1.SupportedValueType
+	13, // 5: kubling.provider.v1.SupportedValueType.type:type_name -> kubling.v1.ValueType
+	14, // 6: kubling.provider.v1.GetSchemaResponse.metadata:type_name -> kubling.provider.v1.SchemaMetadata
+	10, // 7: kubling.provider.v1.QueryCapabilities.ordering:type_name -> kubling.provider.v1.OrderingCapabilities
+	11, // 8: kubling.provider.v1.QueryCapabilities.pagination:type_name -> kubling.provider.v1.PaginationCapabilities
+	9,  // 9: kubling.provider.v1.QueryCapabilities.expressions:type_name -> kubling.provider.v1.ExpressionCapabilities
+	15, // 10: kubling.provider.v1.ExpressionCapabilities.comparison_operators:type_name -> kubling.provider.v1.ComparisonOperator
+	16, // 11: kubling.provider.v1.ExpressionCapabilities.logical_operators:type_name -> kubling.provider.v1.LogicalOperator
+	17, // 12: kubling.provider.v1.ExpressionCapabilities.null_predicate_operators:type_name -> kubling.provider.v1.NullPredicateOperator
+	18, // 13: kubling.provider.v1.ExpressionCapabilities.pattern_operators:type_name -> kubling.provider.v1.PatternOperator
+	0,  // 14: kubling.provider.v1.OrderingCapabilities.default_null_order:type_name -> kubling.provider.v1.DefaultNullOrder
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_capabilities_proto_init() }
@@ -801,13 +994,14 @@ func file_kubling_provider_v1_capabilities_proto_init() {
 	}
 	file_kubling_provider_v1_expression_proto_init()
 	file_kubling_provider_v1_metadata_proto_init()
+	file_kubling_provider_v1_capabilities_proto_msgTypes[3].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kubling_provider_v1_capabilities_proto_rawDesc), len(file_kubling_provider_v1_capabilities_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -4,6 +4,7 @@ package kubling.provider.v1;
 
 import "kubling/provider/v1/capabilities.proto";
 import "kubling/provider/v1/connection.proto";
+import "kubling/provider/v1/lob.proto";
 import "kubling/provider/v1/mutation.proto";
 import "kubling/provider/v1/query.proto";
 import "kubling/provider/v1/semantic.proto";
@@ -51,6 +52,13 @@ service ProviderService {
 
   // Executes a query and streams its result in batches.
   rpc Query(QueryRequest) returns (stream QueryResponse);
+
+  // Reads a provider-owned LOB so Kubling can materialize it into the
+  // client-facing LOB store.
+  rpc ReadLob(ReadLobRequest) returns (stream ReadLobResponse);
+
+  // Releases a provider-owned LOB after materialization or abandonment.
+  rpc ReleaseLob(ReleaseLobRequest) returns (ReleaseLobResponse);
 
   // Inserts one or more tuples.
   rpc Insert(InsertRequest) returns (InsertResponse);
