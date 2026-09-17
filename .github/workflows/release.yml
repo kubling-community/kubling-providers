@@ -1,0 +1,363 @@
+name: Provider contract release train
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact stable version from VERSION (without v)'
+        required: true
+        type: string
+      publish:
+        description: 'Publish BSR, tags, Maven Central and PyPI after validation'
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-contract-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+jobs:
+  identity:
+    name: Validate release identity
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.release.outputs.commit }}
+      version: ${{ steps.release.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - id: release
+        name: Validate canonical version and unused tags
+        env:
+          REQUESTED_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "::error::Release trains must be dispatched from main."
+            exit 1
+          fi
+          python3 tools/check_release.py all
+          version="$(cat VERSION)"
+          if [[ "${REQUESTED_VERSION}" != "${version}" ]]; then
+            echo "::error::Requested ${REQUESTED_VERSION}; VERSION is ${version}."
+            exit 1
+          fi
+          git merge-base --is-ancestor HEAD origin/main
+          git fetch origin --tags
+          python3 tools/check_release.py available
+          echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+
+  protocol:
+    name: Validate protocol
+    needs: identity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - name: Set up Buf
+        uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3 # v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+      - name: Build, lint and check compatibility
+        run: |
+          buf build --error-format github-actions
+          buf lint --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.3.0' --error-format github-actions
+
+  go:
+    name: Validate Go SDK and providers
+    needs: identity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+          cache-dependency-path: '**/go.sum'
+      - name: Regenerate and validate
+        run: |
+          bash generate.sh go
+          cd sdk-go
+          go mod tidy
+          cd ..
+          git diff --exit-code -- sdk-go
+      - name: Build and test all Go modules
+        run: |
+          for module in sdk-go providers/cassandra providers/inmemory providers/kubernetes providers/openapi providers/redis testing; do
+            (cd "${module}" && go build ./... && go vet ./... && go test -race ./...)
+          done
+
+  java:
+    name: Validate Java bindings
+    needs: identity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-java@v5
+        with:
+          distribution: graalvm
+          java-version: '25'
+          cache: maven
+      - name: Build and inspect package
+        run: |
+          python3 tools/check_release.py all
+          bash tools/check_java_build.sh
+          mvn --batch-mode --no-transfer-progress -f sdk-java/pom.xml clean verify
+          python3 tools/check_packages.py java
+
+  python-build:
+    name: Build Python bindings
+    needs: identity
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: sdk-python/requirements-build.txt
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r sdk-python/requirements-build.txt
+          python -m build sdk-python
+          python -m twine check --strict sdk-python/dist/*
+          python tools/check_packages.py python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-provider-release-${{ needs.identity.outputs.version }}
+          path: sdk-python/dist/*
+          if-no-files-found: error
+
+  python-validate:
+    name: Validate Python ${{ matrix.python }}
+    needs: [identity, python-build]
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-provider-release-${{ needs.identity.outputs.version }}
+          path: dist
+      - name: Install wheel and test outside source tree
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          cd "${RUNNER_TEMP}"
+          python -m unittest discover -s "${GITHUB_WORKSPACE}/sdk-python/tests" -v
+      - name: Reinstall from sdist without repository generators
+        run: |
+          python -m pip uninstall -y kubling-provider-grpc
+          python -m pip install dist/*.tar.gz
+          cd "${RUNNER_TEMP}"
+          python -m unittest discover -s "${GITHUB_WORKSPACE}/sdk-python/tests" -v
+
+  publish-contract:
+    name: Publish BSR and coordinated tags
+    if: inputs.publish
+    needs: [identity, protocol, go, java, python-validate]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Set up Buf
+        uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3 # v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+      - name: Revalidate release identity
+        run: |
+          git fetch origin --tags
+          python3 tools/check_release.py available
+          test "$(cat VERSION)" = "${{ needs.identity.outputs.version }}"
+          test "$(git rev-parse HEAD)" = "${{ needs.identity.outputs.commit }}"
+      - name: Publish protocol labels
+        env:
+          RELEASE_COMMIT: ${{ needs.identity.outputs.commit }}
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          buf build --error-format github-actions
+          buf lint --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.3.0' --error-format github-actions
+          buf push \
+            --label main \
+            --label "v${RELEASE_VERSION}" \
+            --source-control-url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/commit/${RELEASE_COMMIT}"
+      - name: Create coordinated tags atomically
+        env:
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tags=(
+            "proto/v${RELEASE_VERSION}"
+            "sdk-go/v${RELEASE_VERSION}"
+            "sdk-java/v${RELEASE_VERSION}"
+            "sdk-python/v${RELEASE_VERSION}"
+          )
+          for tag in "${tags[@]}"; do
+            git tag -a "${tag}" -m "Kubling provider contract ${RELEASE_VERSION}"
+          done
+          python3 tools/check_release.py train HEAD
+          git push --atomic origin "${tags[@]}"
+
+  publish-java:
+    name: Publish Java to Maven Central
+    if: inputs.publish
+    needs: [identity, publish-contract]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-java@v5
+        with:
+          distribution: graalvm
+          java-version: '25'
+          cache: maven
+          server-id: central
+          server-username: MAVEN_CENTRAL_USERNAME
+          server-password: MAVEN_CENTRAL_PASSWORD
+      - name: Validate release train
+        run: |
+          git fetch origin --tags
+          python3 tools/check_release.py train HEAD
+          bash tools/check_java_build.sh
+      - name: Build, sign and publish
+        env:
+          MAVEN_CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          MAVEN_CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: mvn --batch-mode --no-transfer-progress -f sdk-java/pom.xml -Prelease clean deploy
+
+  publish-python:
+    name: Publish Python to PyPI
+    if: inputs.publish
+    needs: [identity, python-build, python-validate, publish-contract]
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kubling-provider-grpc/
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Validate release train
+        run: |
+          git fetch origin --tags
+          python3 tools/check_release.py train HEAD
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-provider-release-${{ needs.identity.outputs.version }}
+          path: dist
+      - name: Publish tested distributions
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false
+
+  finish:
+    name: Verify and announce coordinated release
+    if: inputs.publish
+    needs: [identity, publish-java, publish-python]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.identity.outputs.commit }}
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+      - name: Set up Buf
+        uses: bufbuild/buf-action@8c6a16e16f12ba20b6470afa9c2ba9b5ba8c97c3 # v1
+        with:
+          token: ${{ secrets.BUF_TOKEN }}
+          setup_only: true
+      - name: Verify tags and public registries
+        env:
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          git fetch origin --tags
+          python3 tools/check_release.py train HEAD
+          buf build "buf.build/kubling/kubling-providers:v${RELEASE_VERSION}"
+
+          for attempt in {1..18}; do
+            if GOPROXY=https://proxy.golang.org go list -m \
+              "github.com/kubling-community/kubling-providers/sdk-go@v${RELEASE_VERSION}"; then
+              break
+            fi
+            test "${attempt}" -lt 18
+            sleep 10
+          done
+
+          for url in \
+            "https://repo1.maven.org/maven2/com/kubling/kubling-provider-grpc/${RELEASE_VERSION}/kubling-provider-grpc-${RELEASE_VERSION}.pom" \
+            "https://pypi.org/pypi/kubling-provider-grpc/${RELEASE_VERSION}/json"; do
+            for attempt in {1..18}; do
+              if curl --fail --silent --show-error --location --max-time 20 "${url}" >/dev/null; then
+                break
+              fi
+              test "${attempt}" -lt 18
+              sleep 10
+            done
+          done
+      - name: Create coordinated GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_VERSION: ${{ needs.identity.outputs.version }}
+        run: |
+          gh release create "proto/v${RELEASE_VERSION}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Kubling provider contract v${RELEASE_VERSION}" \
+            --notes "Coordinated provider protocol, Go, Java and Python release ${RELEASE_VERSION}."

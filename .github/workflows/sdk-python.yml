@@ -1,0 +1,115 @@
+name: Python bindings
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['sdk-python/v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing sdk-python/vX.Y.Z tag to validate or publish'
+        required: true
+        type: string
+      publish:
+        description: 'Publish this release to PyPI'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-python-${{ inputs.tag || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+      - id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "${GITHUB_OUTPUT}"
+      - name: Validate coordinated version
+        run: python3 tools/check_release.py all
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: sdk-python/requirements-build.txt
+      - name: Validate release tag
+        if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/')
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          python3 tools/check_release.py python "${RELEASE_TAG}"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
+          python3 tools/check_release.py train HEAD
+      - name: Build distributions
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r sdk-python/requirements-build.txt
+          python -m build sdk-python
+          python -m twine check --strict sdk-python/dist/*
+          python tools/check_packages.py python
+      - uses: actions/upload-artifact@v4
+        with:
+          name: python-provider-bindings
+          path: sdk-python/dist/*
+          if-no-files-found: error
+
+  validate:
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        python: ['3.10', '3.14']
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-provider-bindings
+          path: dist
+      - name: Install wheel and test outside source tree
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install dist/*.whl
+          cd "${RUNNER_TEMP}"
+          python -m unittest discover -s "${GITHUB_WORKSPACE}/sdk-python/tests" -v
+      - name: Reinstall from sdist without repository generators
+        run: |
+          python -m pip uninstall -y kubling-provider-grpc
+          python -m pip install dist/*.tar.gz
+          cd "${RUNNER_TEMP}"
+          python -m unittest discover -s "${GITHUB_WORKSPACE}/sdk-python/tests" -v
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish
+    needs: [build, validate]
+    runs-on: ubuntu-24.04
+    environment:
+      name: pypi
+      url: https://pypi.org/project/kubling-provider-grpc/
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-provider-bindings
+          path: dist
+      - name: Publish tested distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          attestations: false

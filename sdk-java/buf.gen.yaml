@@ -1,0 +1,7 @@
+version: v2
+clean: true
+plugins:
+  - remote: buf.build/protocolbuffers/java:v36.1
+    out: sdk-java/generated
+  - remote: buf.build/grpc/java:v1.84.0
+    out: sdk-java/generated

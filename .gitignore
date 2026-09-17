@@ -35,3 +35,13 @@ Thumbs.db
 # Generated local integration bundles
 /testing/provider-test
 /testing/kubling/provider-test-descriptor-bundle.zip
+
+# Generated Java and Python bindings and packages
+/sdk-java/generated/
+/sdk-java/target/
+/sdk-python/generated/
+/sdk-python/build/
+/sdk-python/dist/
+/sdk-python/LICENSE
+/sdk-python/*.egg-info/
+__pycache__/

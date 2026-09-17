@@ -1,0 +1,4 @@
+include README.md LICENSE pyproject.toml _build_backend.py
+recursive-include generated *.py *.proto
+global-exclude *.py[cod]
+global-exclude __pycache__

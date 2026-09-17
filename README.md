@@ -1,82 +1,41 @@
 # Kubling Providers
 
-Protocol, Go SDK and official external providers for
+The gRPC contract, generated bindings and external data-source providers for
 [Kubling](https://docs.kubling.com/).
 
-Kubling is a data federation engine and distributed planner. Providers keep
-source-specific connectivity, metadata discovery and execution outside the
-engine, exposing them through a language-neutral gRPC contract. The Go SDK
-hides transport and connection lifecycle details so provider authors can work
-with regular Go interfaces.
-
-## Project status
-
-Kubling Providers is under active development and its public APIs are currently
-pre-1.0. Protocol, SDK and provider releases follow semantic versioning, but
-breaking changes may still be introduced while the contracts stabilize. Each
-release documents relevant compatibility or migration requirements.
+Providers keep source-specific connectivity and execution outside the engine.
+The Go SDK supplies the server runtime used by the official providers.
 
 ## Repository layout
 
 - `proto/` — provider gRPC contract, published through Buf.
 - `sdk-go/` — generated Go contract and provider server SDK.
-- `providers/` — independent provider implementations and examples. Each
-  provider owns its configuration, documentation, source-specific behavior and
-  release lifecycle.
-- `testing/` — shared testing profiles and a dynamic Kubling compatibility
-  template.
+- `sdk-java/` — generated Java messages and gRPC stubs.
+- `sdk-python/` — generated Python messages and gRPC stubs.
+- `providers/` — provider implementations and examples.
+- `testing/` — shared compatibility tooling.
 
-The Go SDK and each provider implementation are independent Go modules. Run
-validation from the module being changed:
-
-```sh
-cd sdk-go
-go test ./...
-```
-
-Regenerate the Go contract after changing protobuf files:
+## Development
 
 ```sh
 ./generate.sh
 cd sdk-go && go mod tidy
+go test ./...
 ```
 
-Generated Go protobuf sources are committed so tagged SDK versions can be
-consumed directly by Go tooling.
-
-## Contributing
-
-Contributions written by hand or with the help of a coding agent are welcome.
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development workflow, review
-expectations and a practical guide to starting a new provider.
-
-Participation is governed by the [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md).
-For help, see [`SUPPORT.md`](SUPPORT.md). Report security issues privately as
-described in [`SECURITY.md`](SECURITY.md).
-
-Provider authors can use the [testing guide](testing/README.md) to validate the
-gRPC implementation directly and through a real Kubling VDB without writing
-DDL.
+Use `./generate.sh go`, `java` or `python` to generate only one language.
+Go sources are versioned; Java and Python sources are generated while building
+their packages.
 
 ## Releases
 
-- Protocol definitions are published to `buf.build/kubling/kubling-providers`.
-- Go SDK releases use tags such as `sdk-go/v0.1.0`.
-- Official provider releases use tags such as `providers/kubernetes/v0.1.0`.
+The protocol and generated bindings are released together. Provider runtimes
+keep independent lifecycles. See [`docs/releases.md`](docs/releases.md).
 
-A provider tag validates its Go module, builds `linux/amd64` and `linux/arm64`
-images, pushes `docker.io/kubling/<provider>-provider`, and creates a GitHub
-Release. Every release publishes its exact immutable `vMAJOR.MINOR.PATCH` tag
-and a `sha-*` tag. Stable versions also publish `latest`; prereleases do not.
-Configure the repository secrets `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN`
-before creating the first provider tag.
+## Contributing
 
-Publish the SDK version referenced by a provider's `go.mod` before creating the
-provider tag. Release workflows may reject a provider whose SDK dependency has
-no corresponding `sdk-go/v*` tag.
-
-Provider-specific configuration and local environments are documented in each
-provider directory.
+See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`testing/README.md`](testing/README.md)
+and [`SECURITY.md`](SECURITY.md).
 
 ## License
 
