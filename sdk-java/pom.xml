@@ -43,7 +43,7 @@
     <protobuf.version>4.36.1</protobuf.version>
     <grpc.version>1.84.0</grpc.version>
     <guava.version>33.6.0-jre</guava.version>
-    <junit.version>5.13.4</junit.version>
+    <junit.version>5.12.2</junit.version>
     <project.build.outputTimestamp>2026-09-18T00:00:00Z</project.build.outputTimestamp>
   </properties>
   <dependencyManagement>
