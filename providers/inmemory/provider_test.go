@@ -7,7 +7,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
+	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
@@ -54,6 +56,26 @@ func TestProviderServiceLifecycleAndOperations(t *testing.T) {
 		!capabilities.GetMutations().GetDelete() ||
 		!capabilities.GetMutations().GetGeneratedValues() {
 		t.Fatal("GetCapabilities() mutations are not fully supported")
+	}
+	if got := len(capabilities.GetValues().GetSupportedTypes()); got != int(kublingv1.ValueType_VALUE_TYPE_ARRAY) {
+		t.Fatalf("GetCapabilities() supported value types = %d, want %d", got, kublingv1.ValueType_VALUE_TYPE_ARRAY)
+	}
+	if !containsString(capabilities.GetValues().GetFeatures(), grpcfeatures.ArrayValuesV1) ||
+		!containsString(capabilities.GetValues().GetFeatures(), grpcfeatures.SpatialValuesV1) ||
+		!containsString(capabilities.GetValues().GetFeatures(), grpcfeatures.LobReadV1) {
+		t.Fatalf("GetCapabilities() value features = %v", capabilities.GetValues().GetFeatures())
+	}
+	if got := capabilities.GetValues().GetMaxArrayDimensions(); got != 1 {
+		t.Fatalf("GetCapabilities() max array dimensions = %d, want 1", got)
+	}
+	if got := capabilities.GetValues().GetMaxLobChunkBytes(); got != inMemoryMaxLobChunkBytes {
+		t.Fatalf("GetCapabilities() max LOB chunk bytes = %d, want %d", got, inMemoryMaxLobChunkBytes)
+	}
+	if got := capabilities.GetValues().GetMaxLobBytes(); got != inMemoryMaxLobBytes {
+		t.Fatalf("GetCapabilities() max LOB bytes = %d, want %d", got, inMemoryMaxLobBytes)
+	}
+	if got := capabilities.GetValues().GetLobReferenceRetentionSeconds(); got != uint64(inMemoryLobRetention/time.Second) {
+		t.Fatalf("GetCapabilities() LOB retention = %d", got)
 	}
 
 	schema, err := client.GetSchema(
@@ -294,8 +316,8 @@ func TestProviderQueriesEverySchemaEntityAndValueType(t *testing.T) {
 	if got := strings.Count(
 		schema.GetSchemaDdl(),
 		"OPTIONS(ANNOTATION",
-	); got != 47 {
-		t.Fatalf("GetSchema() annotated field count = %d, want 47", got)
+	); got != 48 {
+		t.Fatalf("GetSchema() annotated field count = %d, want 48", got)
 	}
 
 	connection, err := client.OpenConnection(
@@ -315,8 +337,9 @@ func TestProviderQueriesEverySchemaEntityAndValueType(t *testing.T) {
 	}
 	for entityName, expectedRows := range entityRows {
 		batches := queryBatches(t, client, &providerv1.QueryRequest{
-			ConnectionId: connectionID,
-			Entity:       entity(entityName),
+			ConnectionId:     connectionID,
+			Entity:           entity(entityName),
+			AcceptedFeatures: extendedValueFeatures(),
 		})
 		if got := len(flattenTuples(batches)); got != expectedRows {
 			t.Fatalf(
@@ -329,8 +352,9 @@ func TestProviderQueriesEverySchemaEntityAndValueType(t *testing.T) {
 	}
 
 	typeBatches := queryBatches(t, client, &providerv1.QueryRequest{
-		ConnectionId: connectionID,
-		Entity:       entity(typeSampleEntityName),
+		ConnectionId:     connectionID,
+		Entity:           entity(typeSampleEntityName),
+		AcceptedFeatures: extendedValueFeatures(),
 	})
 	if len(typeBatches) != 1 {
 		t.Fatalf("Query(TYPE_SAMPLE) batches = %d, want 1", len(typeBatches))
@@ -370,11 +394,18 @@ func TestProviderQueriesEverySchemaEntityAndValueType(t *testing.T) {
 				field.GetType(),
 			)
 		}
+		if field.GetType() == kublingv1.ValueType_VALUE_TYPE_ARRAY {
+			descriptor := field.GetTypeDescriptor()
+			if descriptor.GetType() != kublingv1.ValueType_VALUE_TYPE_ARRAY ||
+				descriptor.GetElementType().GetType() != kublingv1.ValueType_VALUE_TYPE_INTEGER {
+				t.Fatalf("TYPE_SAMPLE.%s descriptor = %v", field.GetName(), descriptor)
+			}
+		}
 
 		coveredTypes[field.GetType()] = true
 	}
 
-	for typeNumber := int32(kublingv1.ValueType_VALUE_TYPE_STRING); typeNumber <= int32(kublingv1.ValueType_VALUE_TYPE_XML); typeNumber++ {
+	for typeNumber := int32(kublingv1.ValueType_VALUE_TYPE_STRING); typeNumber <= int32(kublingv1.ValueType_VALUE_TYPE_ARRAY); typeNumber++ {
 		valueType := kublingv1.ValueType(typeNumber)
 		if !coveredTypes[valueType] {
 			t.Fatalf("Query(TYPE_SAMPLE) does not cover %v", valueType)
@@ -391,6 +422,237 @@ func TestProviderQueriesEverySchemaEntityAndValueType(t *testing.T) {
 			status.Code(err),
 			codes.FailedPrecondition,
 		)
+	}
+}
+
+func TestProviderNegotiatesExtendedValueRepresentations(t *testing.T) {
+	client := newTestClient(t)
+	ctx := context.Background()
+	connection, err := client.OpenConnection(
+		ctx,
+		&providerv1.OpenConnectionRequest{},
+	)
+	if err != nil {
+		t.Fatalf("OpenConnection() error = %v", err)
+	}
+	connectionID := connection.GetConnectionId()
+
+	spatialProjections := []*providerv1.Projection{
+		{Expression: fieldExpression("geometry_value")},
+		{Expression: fieldExpression("geography_value")},
+	}
+	legacyBatches := queryBatches(t, client, &providerv1.QueryRequest{
+		ConnectionId: connectionID,
+		Entity:       entity(typeSampleEntityName),
+		Projections:  spatialProjections,
+	})
+	legacyValues := legacyBatches[0].GetTuples()[0].GetValues()
+	if legacyValues[0].GetGeometryValue() == nil ||
+		legacyValues[1].GetGeographyValue() == nil {
+		t.Fatalf("legacy spatial values = %v", legacyValues)
+	}
+
+	spatialBatches := queryBatches(t, client, &providerv1.QueryRequest{
+		ConnectionId:     connectionID,
+		Entity:           entity(typeSampleEntityName),
+		Projections:      spatialProjections,
+		AcceptedFeatures: []string{grpcfeatures.SpatialValuesV1},
+	})
+	spatialValues := spatialBatches[0].GetTuples()[0].GetValues()
+	if got := spatialValues[0].GetGeometryWithCrs().GetSrid(); got != 4326 {
+		t.Fatalf("geometry SRID = %d, want 4326", got)
+	}
+	if got := spatialValues[1].GetGeographyWithCrs().GetSrid(); got != 4326 {
+		t.Fatalf("geography SRID = %d, want 4326", got)
+	}
+
+	arrayProjection := []*providerv1.Projection{{
+		Expression: fieldExpression("integer_array_value"),
+	}}
+	stream, err := client.Query(ctx, &providerv1.QueryRequest{
+		ConnectionId: connectionID,
+		Entity:       entity(typeSampleEntityName),
+		Projections:  arrayProjection,
+	})
+	if err != nil {
+		t.Fatalf("Query(array) setup error = %v", err)
+	}
+	_, err = stream.Recv()
+	if got := status.Code(err); got != codes.FailedPrecondition {
+		t.Fatalf("Query(array) status = %s, want %s", got, codes.FailedPrecondition)
+	}
+
+	arrayBatches := queryBatches(t, client, &providerv1.QueryRequest{
+		ConnectionId:     connectionID,
+		Entity:           entity(typeSampleEntityName),
+		Projections:      arrayProjection,
+		AcceptedFeatures: []string{grpcfeatures.ArrayValuesV1},
+	})
+	arrayField := arrayBatches[0].GetFields()[0]
+	array := arrayBatches[0].GetTuples()[0].GetValues()[0].GetArrayValue()
+	if arrayField.GetTypeDescriptor().GetElementType().GetType() !=
+		kublingv1.ValueType_VALUE_TYPE_INTEGER {
+		t.Fatalf("array field descriptor = %v", arrayField.GetTypeDescriptor())
+	}
+	if len(array.GetElements()) != 3 || !isNullValue(array.GetElements()[1]) {
+		t.Fatalf("array value = %v", array)
+	}
+}
+
+func TestProviderLobLifecycle(t *testing.T) {
+	client := newTestClient(t)
+	ctx := context.Background()
+	connection, err := client.OpenConnection(
+		ctx,
+		&providerv1.OpenConnectionRequest{},
+	)
+	if err != nil {
+		t.Fatalf("OpenConnection() error = %v", err)
+	}
+	connectionID := connection.GetConnectionId()
+	batches := queryBatches(t, client, &providerv1.QueryRequest{
+		ConnectionId: connectionID,
+		Entity:       entity(typeSampleEntityName),
+		Projections: []*providerv1.Projection{
+			{Expression: fieldExpression("blob_value")},
+			{Expression: fieldExpression("clob_value")},
+		},
+		AcceptedFeatures: []string{grpcfeatures.LobReadV1},
+	})
+	values := batches[0].GetTuples()[0].GetValues()
+	expected := [][]byte{
+		[]byte("binary large object"),
+		[]byte("character large object"),
+	}
+
+	for index, value := range values {
+		reference := value.GetLobReference()
+		if reference.GetSessionId() != connectionID {
+			t.Fatalf("LOB %d session_id = %q, want %q", index, reference.GetSessionId(), connectionID)
+		}
+		if reference.ExpiresAtUnixMs == nil || reference.GetSizeBytes() != uint64(len(expected[index])) {
+			t.Fatalf("LOB %d reference = %v", index, reference)
+		}
+
+		stream, err := client.ReadLob(ctx, &providerv1.ReadLobRequest{
+			ConnectionId:  reference.GetSessionId(),
+			LobId:         reference.GetLobId(),
+			MaxChunkBytes: 4,
+		})
+		if err != nil {
+			t.Fatalf("ReadLob(%d) setup error = %v", index, err)
+		}
+		var data []byte
+		var expectedOffset uint64
+		for {
+			response, err := stream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("ReadLob(%d).Recv() error = %v", index, err)
+			}
+			if response.GetOffset() != expectedOffset || len(response.GetData()) > 4 {
+				t.Fatalf("ReadLob(%d) response = %v", index, response)
+			}
+			data = append(data, response.GetData()...)
+			expectedOffset += uint64(len(response.GetData()))
+		}
+		if string(data) != string(expected[index]) {
+			t.Fatalf("ReadLob(%d) data = %q, want %q", index, data, expected[index])
+		}
+
+		rangeLength := uint64(5)
+		rangeStream, err := client.ReadLob(ctx, &providerv1.ReadLobRequest{
+			ConnectionId:  reference.GetSessionId(),
+			LobId:         reference.GetLobId(),
+			Offset:        2,
+			Length:        &rangeLength,
+			MaxChunkBytes: 3,
+		})
+		if err != nil {
+			t.Fatalf("ReadLob(range %d) setup error = %v", index, err)
+		}
+		var rangeData []byte
+		for {
+			response, err := rangeStream.Recv()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("ReadLob(range %d).Recv() error = %v", index, err)
+			}
+			rangeData = append(rangeData, response.GetData()...)
+		}
+		if string(rangeData) != string(expected[index][2:7]) {
+			t.Fatalf(
+				"ReadLob(range %d) data = %q, want %q",
+				index,
+				rangeData,
+				expected[index][2:7],
+			)
+		}
+
+		zeroLength := uint64(0)
+		zeroStream, err := client.ReadLob(ctx, &providerv1.ReadLobRequest{
+			ConnectionId: reference.GetSessionId(),
+			LobId:        reference.GetLobId(),
+			Offset:       uint64(len(expected[index])),
+			Length:       &zeroLength,
+		})
+		if err != nil {
+			t.Fatalf("ReadLob(zero %d) setup error = %v", index, err)
+		}
+		zeroResponse, err := zeroStream.Recv()
+		if err != nil {
+			t.Fatalf("ReadLob(zero %d).Recv() error = %v", index, err)
+		}
+		if zeroResponse.GetOffset() != uint64(len(expected[index])) ||
+			len(zeroResponse.GetData()) != 0 ||
+			!zeroResponse.GetEndOfRead() {
+			t.Fatalf("ReadLob(zero %d) response = %v", index, zeroResponse)
+		}
+		if _, err := zeroStream.Recv(); err != io.EOF {
+			t.Fatalf("ReadLob(zero %d) terminal error = %v, want EOF", index, err)
+		}
+
+		for releaseCall := 0; releaseCall < 2; releaseCall++ {
+			if _, err := client.ReleaseLob(ctx, &providerv1.ReleaseLobRequest{
+				ConnectionId: reference.GetSessionId(),
+				LobId:        reference.GetLobId(),
+			}); err != nil {
+				t.Fatalf("ReleaseLob(%d, call %d) error = %v", index, releaseCall, err)
+			}
+		}
+
+		releasedStream, err := client.ReadLob(ctx, &providerv1.ReadLobRequest{
+			ConnectionId: reference.GetSessionId(),
+			LobId:        reference.GetLobId(),
+		})
+		if err != nil {
+			t.Fatalf("ReadLob(released %d) setup error = %v", index, err)
+		}
+		_, err = releasedStream.Recv()
+		if got := status.Code(err); got != codes.NotFound {
+			t.Fatalf("ReadLob(released %d) status = %s, want %s", index, got, codes.NotFound)
+		}
+	}
+}
+
+func containsString(values []string, expected string) bool {
+	for _, value := range values {
+		if value == expected {
+			return true
+		}
+	}
+
+	return false
+}
+
+func extendedValueFeatures() []string {
+	return []string{
+		grpcfeatures.ArrayValuesV1,
+		grpcfeatures.SpatialValuesV1,
 	}
 }
 

@@ -21,6 +21,13 @@ func (s *Server) Query(
 		return err
 	}
 	defer release()
+	if err := validateQueryRequestValues(request); err != nil {
+		return status.Errorf(
+			codes.InvalidArgument,
+			"query contains an invalid value: %v",
+			err,
+		)
+	}
 
 	providerRequest :=
 		proto.Clone(request).(*providerv1.QueryRequest)
@@ -38,6 +45,7 @@ func (s *Server) Query(
 			"provider returned a nil result stream",
 		)
 	}
+	_, lobTransportAvailable := connection.(LobConnection)
 
 	defer func() {
 		closeErr := resultStream.Close()
@@ -66,6 +74,19 @@ func (s *Server) Query(
 				"provider returned a nil query batch",
 			)
 		}
+
+		if err := validateOutputBatchFeatures(
+			batch,
+			request.GetAcceptedFeatures(),
+			lobTransportAvailable,
+		); err != nil {
+			return status.Errorf(
+				codes.Internal,
+				"provider returned an unsupported query value: %v",
+				err,
+			)
+		}
+		batch = prepareOutputBatch(batch, request.GetConnectionId())
 
 		if err := serverStream.Send(
 			&providerv1.QueryResponse{

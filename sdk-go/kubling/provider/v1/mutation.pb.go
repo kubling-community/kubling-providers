@@ -37,8 +37,13 @@ type InsertRequest struct {
 	//
 	// When empty, no generated values are requested.
 	ReturningFields []string `protobuf:"bytes,4,rep,name=returning_fields,json=returningFields,proto3" json:"returning_fields,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// Optional value representations Kubling accepts in generated_values.
+	//
+	// Providers must not emit an optional representation unless its canonical
+	// feature name appears here, even when the provider advertises support.
+	AcceptedFeatures []string `protobuf:"bytes,5,rep,name=accepted_features,json=acceptedFeatures,proto3" json:"accepted_features,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *InsertRequest) Reset() {
@@ -95,6 +100,13 @@ func (x *InsertRequest) GetRows() *TupleBatch {
 func (x *InsertRequest) GetReturningFields() []string {
 	if x != nil {
 		return x.ReturningFields
+	}
+	return nil
+}
+
+func (x *InsertRequest) GetAcceptedFeatures() []string {
+	if x != nil {
+		return x.AcceptedFeatures
 	}
 	return nil
 }
@@ -459,12 +471,13 @@ var File_kubling_provider_v1_mutation_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_mutation_proto_rawDesc = "" +
 	"\n" +
-	"\"kubling/provider/v1/mutation.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/query.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xd2\x01\n" +
+	"\"kubling/provider/v1/mutation.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/query.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xff\x01\n" +
 	"\rInsertRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12<\n" +
 	"\x06entity\x18\x02 \x01(\v2$.kubling.provider.v1.EntityReferenceR\x06entity\x123\n" +
 	"\x04rows\x18\x03 \x01(\v2\x1f.kubling.provider.v1.TupleBatchR\x04rows\x12)\n" +
-	"\x10returning_fields\x18\x04 \x03(\tR\x0freturningFields\"\x98\x01\n" +
+	"\x10returning_fields\x18\x04 \x03(\tR\x0freturningFields\x12+\n" +
+	"\x11accepted_features\x18\x05 \x03(\tR\x10acceptedFeatures\"\x98\x01\n" +
 	"\x0eInsertResponse\x12(\n" +
 	"\raffected_rows\x18\x01 \x01(\x04H\x00R\faffectedRows\x88\x01\x01\x12J\n" +
 	"\x10generated_values\x18\x02 \x01(\v2\x1f.kubling.provider.v1.TupleBatchR\x0fgeneratedValuesB\x10\n" +

@@ -1,0 +1,43 @@
+name: Java signing check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: provider-java-signing-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify-signing:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: Set up GraalVM
+        uses: actions/setup-java@v5
+        with:
+          distribution: graalvm
+          java-version: '25'
+          cache: maven
+      - name: Validate coordinated version and build JDK
+        run: |
+          python3 tools/check_release.py all
+          bash tools/check_java_build.sh
+      - name: Build, test and sign without deployment
+        env:
+          MAVEN_GPG_KEY: ${{ secrets.MAVEN_GPG_PRIVATE_KEY }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.MAVEN_GPG_PASSPHRASE }}
+        run: |
+          test -n "${MAVEN_GPG_KEY}" || { echo 'Missing MAVEN_GPG_PRIVATE_KEY'; exit 1; }
+          test -n "${MAVEN_GPG_PASSPHRASE}" || { echo 'Missing MAVEN_GPG_PASSPHRASE'; exit 1; }
+          mvn --batch-mode --no-transfer-progress -f sdk-java/pom.xml -Prelease -Dgpg.useagent=false clean verify
+      - name: Inspect packages and verify signatures
+        run: |
+          python3 tools/check_packages.py java
+          python3 tools/check_java_signatures.py

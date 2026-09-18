@@ -4,6 +4,7 @@ package kubling.provider.v1;
 
 import "kubling/provider/v1/expression.proto";
 import "kubling/provider/v1/metadata.proto";
+import "kubling/v1/value.proto";
 
 option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
 option java_multiple_files = true;
@@ -24,6 +25,45 @@ message GetCapabilitiesResponse {
   TransactionCapabilities transactions = 1;
   QueryCapabilities query = 2;
   MutationCapabilities mutations = 3;
+  ValueCapabilities values = 4;
+}
+
+// Value representations supported by the provider server.
+message ValueCapabilities {
+  // Logical types supported in requests and responses.
+  repeated SupportedValueType supported_types = 1;
+
+  // Canonical representation features supported by the provider.
+  //
+  // Names use the shared Kubling feature registry, including array_values_v1
+  // and spatial_values_v1. Advertising a feature does not permit a provider to
+  // emit it unless the individual request also accepts it.
+  repeated string features = 2;
+
+  // Maximum supported ARRAY nesting depth.
+  //
+  // Required and positive when array_values_v1 is advertised.
+  optional uint32 max_array_dimensions = 3;
+
+  // Maximum payload bytes per ReadLob response.
+  //
+  // Required and positive when lob_read_v1 is advertised.
+  optional uint32 max_lob_chunk_bytes = 4;
+
+  // Maximum payload bytes represented by a newly issued provider LOB
+  // reference. Required and positive when lob_read_v1 is advertised.
+  optional uint64 max_lob_bytes = 5;
+
+  // Positive minimum lifetime, in seconds, of a newly issued provider LOB
+  // reference. Required when lob_read_v1 is advertised.
+  optional uint64 lob_reference_retention_seconds = 6;
+}
+
+// Directional support for one logical Kubling type.
+message SupportedValueType {
+  kubling.v1.ValueType type = 1;
+  bool input = 2;
+  bool output = 3;
 }
 
 // Schema definition exposed by the provider server.

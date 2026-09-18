@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -121,21 +122,29 @@ func TestServerQueryStreamsBatches(t *testing.T) {
 			Fields: []*providerv1.Field{
 				{
 					Name: "id",
+					Type: kublingv1.ValueType_VALUE_TYPE_STRING,
 				},
 			},
 			Tuples: []*providerv1.Tuple{
-				{},
+				{Values: []*kublingv1.Value{{
+					Kind: &kublingv1.Value_StringValue{StringValue: "id-1"},
+				}}},
 			},
 		},
 		{
 			Fields: []*providerv1.Field{
 				{
 					Name: "title",
+					Type: kublingv1.ValueType_VALUE_TYPE_STRING,
 				},
 			},
 			Tuples: []*providerv1.Tuple{
-				{},
-				{},
+				{Values: []*kublingv1.Value{{
+					Kind: &kublingv1.Value_StringValue{StringValue: "first"},
+				}}},
+				{Values: []*kublingv1.Value{{
+					Kind: &kublingv1.Value_StringValue{StringValue: "second"},
+				}}},
 			},
 		},
 	}
@@ -297,6 +306,7 @@ func TestServerQueryErrorPrecedence(t *testing.T) {
 		Fields: []*providerv1.Field{
 			{
 				Name: "id",
+				Type: kublingv1.ValueType_VALUE_TYPE_STRING,
 			},
 		},
 	}

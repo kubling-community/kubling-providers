@@ -14,7 +14,9 @@ on:
       - 'buf.lock'
       - 'buf.yaml'
       - 'generate.sh'
+      - 'VERSION'
       - 'tools/bootstrap.sh'
+      - 'tools/check_release.py'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/sdk-go.yml'
   pull_request:
@@ -28,7 +30,9 @@ on:
       - 'buf.lock'
       - 'buf.yaml'
       - 'generate.sh'
+      - 'VERSION'
       - 'tools/bootstrap.sh'
+      - 'tools/check_release.py'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/sdk-go.yml'
 
@@ -43,6 +47,16 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate coordinated version
+        run: |
+          python3 tools/check_release.py all
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            python3 tools/check_release.py go "${GITHUB_REF_NAME}"
+            python3 tools/check_release.py train HEAD
+          fi
 
       - name: Set up Go
         uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
@@ -55,7 +69,7 @@ jobs:
         run: bash tools/bootstrap.sh
 
       - name: Generate Go SDK
-        run: bash generate.sh
+        run: bash generate.sh go
 
       - name: Tidy Go SDK module
         working-directory: sdk-go
@@ -97,6 +111,9 @@ jobs:
             echo "::error::${GITHUB_REF_NAME} is not a valid SDK semantic version tag."
             exit 1
           fi
+
+          python3 tools/check_release.py go "${GITHUB_REF_NAME}"
+          python3 tools/check_release.py train HEAD
 
           module="$(sed -n 's/^module //p' sdk-go/go.mod)"
           if [[ "${module}" != "github.com/kubling-community/kubling-providers/sdk-go" ]]; then

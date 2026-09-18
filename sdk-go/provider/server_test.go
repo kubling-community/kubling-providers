@@ -3,9 +3,11 @@ package provider
 import (
 	"context"
 	"errors"
+	"strings"
 	"sync"
 	"testing"
 
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -229,6 +231,39 @@ func TestServerGetCapabilities(t *testing.T) {
 				got,
 				codes.Internal,
 			)
+		}
+	})
+
+	t.Run("rejects inconsistent value capabilities", func(t *testing.T) {
+		server := NewServer(&serverTestProvider{
+			capabilitiesFunc: func(
+				context.Context,
+			) (*Capabilities, error) {
+				return &Capabilities{Values: &providerv1.ValueCapabilities{
+					SupportedTypes: []*providerv1.SupportedValueType{{
+						Type:  kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
+						Input: true,
+					}},
+				}}, nil
+			},
+		})
+
+		response, err := server.GetCapabilities(
+			context.Background(),
+			&providerv1.GetCapabilitiesRequest{},
+		)
+		if response != nil {
+			t.Fatal("GetCapabilities returned inconsistent capabilities")
+		}
+		if got := status.Code(err); got != codes.Internal {
+			t.Fatalf(
+				"GetCapabilities status = %s, want %s",
+				got,
+				codes.Internal,
+			)
+		}
+		if !strings.Contains(err.Error(), "invalid capabilities") {
+			t.Fatalf("GetCapabilities error = %v", err)
 		}
 	})
 }

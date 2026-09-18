@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools==84.0.0"]
+build-backend = "_build_backend"
+backend-path = ["."]
+
+[project]
+name = "kubling-provider-grpc"
+version = "0.4.0"
+description = "Generated Python bindings for the Kubling provider gRPC protocol"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{name = "Kubling contributors"}]
+dependencies = [
+  "kubling-grpc==1.1.1",
+  "protobuf>=7.36.1,<8",
+  "grpcio>=1.84.0,<2",
+]
+
+[project.urls]
+Homepage = "https://github.com/kubling-community/kubling-providers"
+Repository = "https://github.com/kubling-community/kubling-providers"
+Issues = "https://github.com/kubling-community/kubling-providers/issues"
+
+[tool.setuptools.packages.find]
+where = ["generated"]
+include = ["kubling.provider*"]
+namespaces = true
+
+[tool.setuptools.package-data]
+"kubling.provider" = ["proto/kubling/provider/v1/*.proto"]

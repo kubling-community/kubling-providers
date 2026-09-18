@@ -42,8 +42,9 @@ type store struct {
 }
 
 type entityField struct {
-	name      string
-	valueType kublingv1.ValueType
+	name           string
+	valueType      kublingv1.ValueType
+	typeDescriptor *kublingv1.TypeDescriptor
 }
 
 type entityDefinition struct {
@@ -96,6 +97,16 @@ var (
 		{name: "byte_value", valueType: kublingv1.ValueType_VALUE_TYPE_BYTE},
 		{name: "short_value", valueType: kublingv1.ValueType_VALUE_TYPE_SHORT},
 		{name: "integer_value", valueType: kublingv1.ValueType_VALUE_TYPE_INTEGER},
+		{
+			name:      "integer_array_value",
+			valueType: kublingv1.ValueType_VALUE_TYPE_ARRAY,
+			typeDescriptor: &kublingv1.TypeDescriptor{
+				Type: kublingv1.ValueType_VALUE_TYPE_ARRAY,
+				ElementType: &kublingv1.TypeDescriptor{
+					Type: kublingv1.ValueType_VALUE_TYPE_INTEGER,
+				},
+			},
+		},
 		{name: "long_value", valueType: kublingv1.ValueType_VALUE_TYPE_LONG},
 		{name: "biginteger_value", valueType: kublingv1.ValueType_VALUE_TYPE_BIGINTEGER},
 		{name: "float_value", valueType: kublingv1.ValueType_VALUE_TYPE_FLOAT},
@@ -224,14 +235,20 @@ func typeSampleRows() []entityRow {
 
 	return []entityRow{
 		newEntityRow("canonical", map[string]*kublingv1.Value{
-			"sample_id":        stringValue("canonical"),
-			"string_value":     stringValue("Kubling"),
-			"varbinary_value":  varbinaryValue([]byte{0x4b, 0x55, 0x42}),
-			"char_value":       charValue("K"),
-			"boolean_value":    booleanValue(true),
-			"byte_value":       byteValue(127),
-			"short_value":      shortValue(32_767),
-			"integer_value":    integerValue(2_147_483_647),
+			"sample_id":       stringValue("canonical"),
+			"string_value":    stringValue("Kubling"),
+			"varbinary_value": varbinaryValue([]byte{0x4b, 0x55, 0x42}),
+			"char_value":      charValue("K"),
+			"boolean_value":   booleanValue(true),
+			"byte_value":      byteValue(127),
+			"short_value":     shortValue(32_767),
+			"integer_value":   integerValue(2_147_483_647),
+			"integer_array_value": arrayValue(
+				&kublingv1.TypeDescriptor{Type: kublingv1.ValueType_VALUE_TYPE_INTEGER},
+				integerValue(1),
+				nullValue(),
+				integerValue(3),
+			),
 			"long_value":       longValue(9_223_372_036_854_775_000),
 			"biginteger_value": bigintegerValue("123456789012345678901234567890"),
 			"float_value":      floatValue(3.25),
@@ -480,6 +497,18 @@ func geometryValue(value []byte) *kublingv1.Value {
 
 func geographyValue(value []byte) *kublingv1.Value {
 	return &kublingv1.Value{Kind: &kublingv1.Value_GeographyValue{GeographyValue: value}}
+}
+
+func arrayValue(
+	elementType *kublingv1.TypeDescriptor,
+	elements ...*kublingv1.Value,
+) *kublingv1.Value {
+	return &kublingv1.Value{Kind: &kublingv1.Value_ArrayValue{
+		ArrayValue: &kublingv1.ArrayValue{
+			ElementType: elementType,
+			Elements:    elements,
+		},
+	}}
 }
 
 func jsonValue(value string) *kublingv1.Value {

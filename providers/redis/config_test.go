@@ -91,6 +91,32 @@ namespaces:
 	}
 }
 
+func TestLoadConfigRejectsArrayUntilRedisCodecSupportsIt(t *testing.T) {
+	directory := t.TempDir()
+	writeTestFile(t, filepath.Join(directory, "schema.yaml"), `
+tables:
+  - name: TASK
+    structure: hash
+    key:
+      name: id
+      type: STRING
+    fields:
+      - name: tags
+        type: ARRAY
+`)
+	configPath := filepath.Join(directory, "provider.yaml")
+	writeTestFile(t, configPath, `
+namespaces:
+  sample:
+    schemaFile: schema.yaml
+`)
+
+	_, err := LoadConfig(configPath)
+	if err == nil || !strings.Contains(err.Error(), `unsupported Kubling type "ARRAY"`) {
+		t.Fatalf("LoadConfig() error = %v, want unsupported ARRAY type", err)
+	}
+}
+
 func TestExampleConfigCoversSharedSampleSchema(t *testing.T) {
 	config, err := LoadConfig("config.example.yaml")
 	if err != nil {

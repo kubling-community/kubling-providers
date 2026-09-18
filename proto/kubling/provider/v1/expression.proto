@@ -37,6 +37,12 @@ message FieldReference {
 // Literal value used in an expression.
 message Literal {
   kubling.v1.Value value = 1;
+
+  // Complete declared type of the literal when value alone is insufficient.
+  //
+  // This preserves recursive ARRAY types and the type of explicit null values.
+  // When value is non-null, its concrete kind must match this descriptor.
+  kubling.v1.TypeDescriptor declared_type = 2;
 }
 
 // Comparison between two expressions.

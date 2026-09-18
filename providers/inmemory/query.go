@@ -3,8 +3,10 @@ package inmemory
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sort"
 
+	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
@@ -46,6 +48,21 @@ func (c *Connection) Query(
 			"plan projections: %v",
 			err,
 		)
+	}
+	if !slices.Contains(
+		request.GetAcceptedFeatures(),
+		grpcfeatures.ArrayValuesV1,
+	) {
+		for _, projection := range projections {
+			if projection.field.GetType() == kublingv1.ValueType_VALUE_TYPE_ARRAY {
+				return nil, status.Errorf(
+					codes.FailedPrecondition,
+					"projection %q requires feature %q",
+					projection.field.GetName(),
+					grpcfeatures.ArrayValuesV1,
+				)
+			}
+		}
 	}
 
 	rows := c.store.snapshot(entity)
@@ -117,7 +134,14 @@ func (c *Connection) Query(
 				)
 			}
 
-			values = append(values, value)
+			output, err := c.outputValue(
+				value,
+				request.GetAcceptedFeatures(),
+			)
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, output)
 		}
 
 		tuples = append(tuples, &providerv1.Tuple{
@@ -153,8 +177,9 @@ func planProjections(
 					},
 				},
 				field: &providerv1.Field{
-					Name: field.name,
-					Type: field.valueType,
+					Name:           field.name,
+					Type:           field.valueType,
+					TypeDescriptor: field.typeDescriptor,
 				},
 			})
 		}
@@ -195,11 +220,88 @@ func planProjections(
 			field: &providerv1.Field{
 				Name: outputName,
 				Type: valueType,
+				TypeDescriptor: expressionTypeDescriptor(
+					entity,
+					projection.GetExpression(),
+				),
 			},
 		})
 	}
 
 	return projections, nil
+}
+
+func expressionTypeDescriptor(
+	entity *entityDefinition,
+	expression *providerv1.Expression,
+) *kublingv1.TypeDescriptor {
+	switch kind := expression.GetKind().(type) {
+	case *providerv1.Expression_Field:
+		field, found := entity.fieldByName(kind.Field.GetName())
+		if found {
+			return field.typeDescriptor
+		}
+	case *providerv1.Expression_Literal:
+		if declaredType := kind.Literal.GetDeclaredType(); declaredType != nil {
+			return declaredType
+		}
+		if array := kind.Literal.GetValue().GetArrayValue(); array != nil {
+			return &kublingv1.TypeDescriptor{
+				Type:        kublingv1.ValueType_VALUE_TYPE_ARRAY,
+				ElementType: array.GetElementType(),
+			}
+		}
+	}
+
+	return nil
+}
+
+func (c *Connection) outputValue(
+	value *kublingv1.Value,
+	acceptedFeatures []string,
+) (*kublingv1.Value, error) {
+	if slices.Contains(acceptedFeatures, grpcfeatures.LobReadV1) {
+		switch typed := value.GetKind().(type) {
+		case *kublingv1.Value_BlobValue:
+			return c.newLobValue(
+				kublingv1.ValueType_VALUE_TYPE_BLOB,
+				typed.BlobValue.GetData(),
+			)
+		case *kublingv1.Value_ClobValue:
+			return c.newLobValue(
+				kublingv1.ValueType_VALUE_TYPE_CLOB,
+				[]byte(typed.ClobValue.GetData()),
+			)
+		}
+	}
+
+	if !slices.Contains(acceptedFeatures, grpcfeatures.SpatialValuesV1) {
+		return value, nil
+	}
+
+	const sampleSRID int32 = 4326
+	switch typed := value.GetKind().(type) {
+	case *kublingv1.Value_GeometryValue:
+		return &kublingv1.Value{Kind: &kublingv1.Value_GeometryWithCrs{
+			GeometryWithCrs: &kublingv1.SpatialValue{
+				Wkb:  append([]byte(nil), typed.GeometryValue...),
+				Srid: pointer(sampleSRID),
+			},
+		}}, nil
+	case *kublingv1.Value_GeographyValue:
+		return &kublingv1.Value{Kind: &kublingv1.Value_GeographyWithCrs{
+			GeographyWithCrs: &kublingv1.SpatialValue{
+				Wkb:  append([]byte(nil), typed.GeographyValue...),
+				Srid: pointer(sampleSRID),
+			},
+		}}, nil
+	default:
+		return value, nil
+	}
+}
+
+func pointer[T any](value T) *T {
+	return &value
 }
 
 func evaluateOrderValues(

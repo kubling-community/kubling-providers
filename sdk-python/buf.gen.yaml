@@ -1,0 +1,10 @@
+version: v2
+
+clean: true
+
+plugins:
+  - remote: buf.build/protocolbuffers/python:v36.1
+    out: sdk-python/generated
+
+  - remote: buf.build/grpc/python:v1.84.0
+    out: sdk-python/generated

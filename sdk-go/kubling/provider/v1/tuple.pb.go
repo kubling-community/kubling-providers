@@ -27,12 +27,19 @@ type Field struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Field name exposed to Kubling.
 	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
-	// Logical Kubling type of the field.
+	// Top-level logical Kubling type of the field.
 	//
-	// This metadata also determines the logical type of null values.
-	Type          v1.ValueType `protobuf:"varint,2,opt,name=type,proto3,enum=kubling.v1.ValueType" json:"type,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	// Retained for compatibility with consumers that predate type_descriptor.
+	// When type_descriptor is present, this value must match its type.
+	Type v1.ValueType `protobuf:"varint,2,opt,name=type,proto3,enum=kubling.v1.ValueType" json:"type,omitempty"`
+	// Complete logical type of the field.
+	//
+	// Providers must set this for ARRAY fields so recursive element types remain
+	// available for empty arrays and null values. Non-array providers may omit it
+	// while compatibility with the legacy type field is required.
+	TypeDescriptor *v1.TypeDescriptor `protobuf:"bytes,3,opt,name=type_descriptor,json=typeDescriptor,proto3" json:"type_descriptor,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *Field) Reset() {
@@ -77,6 +84,13 @@ func (x *Field) GetType() v1.ValueType {
 		return x.Type
 	}
 	return v1.ValueType(0)
+}
+
+func (x *Field) GetTypeDescriptor() *v1.TypeDescriptor {
+	if x != nil {
+		return x.TypeDescriptor
+	}
+	return nil
 }
 
 // Ordered tuple of values.
@@ -188,10 +202,11 @@ var File_kubling_provider_v1_tuple_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_tuple_proto_rawDesc = "" +
 	"\n" +
-	"\x1fkubling/provider/v1/tuple.proto\x12\x13kubling.provider.v1\x1a\x16kubling/v1/value.proto\"F\n" +
+	"\x1fkubling/provider/v1/tuple.proto\x12\x13kubling.provider.v1\x1a\x16kubling/v1/value.proto\"\x8b\x01\n" +
 	"\x05Field\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12)\n" +
-	"\x04type\x18\x02 \x01(\x0e2\x15.kubling.v1.ValueTypeR\x04type\"2\n" +
+	"\x04type\x18\x02 \x01(\x0e2\x15.kubling.v1.ValueTypeR\x04type\x12C\n" +
+	"\x0ftype_descriptor\x18\x03 \x01(\v2\x1a.kubling.v1.TypeDescriptorR\x0etypeDescriptor\"2\n" +
 	"\x05Tuple\x12)\n" +
 	"\x06values\x18\x01 \x03(\v2\x11.kubling.v1.ValueR\x06values\"t\n" +
 	"\n" +
@@ -215,22 +230,24 @@ func file_kubling_provider_v1_tuple_proto_rawDescGZIP() []byte {
 
 var file_kubling_provider_v1_tuple_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_kubling_provider_v1_tuple_proto_goTypes = []any{
-	(*Field)(nil),      // 0: kubling.provider.v1.Field
-	(*Tuple)(nil),      // 1: kubling.provider.v1.Tuple
-	(*TupleBatch)(nil), // 2: kubling.provider.v1.TupleBatch
-	(v1.ValueType)(0),  // 3: kubling.v1.ValueType
-	(*v1.Value)(nil),   // 4: kubling.v1.Value
+	(*Field)(nil),             // 0: kubling.provider.v1.Field
+	(*Tuple)(nil),             // 1: kubling.provider.v1.Tuple
+	(*TupleBatch)(nil),        // 2: kubling.provider.v1.TupleBatch
+	(v1.ValueType)(0),         // 3: kubling.v1.ValueType
+	(*v1.TypeDescriptor)(nil), // 4: kubling.v1.TypeDescriptor
+	(*v1.Value)(nil),          // 5: kubling.v1.Value
 }
 var file_kubling_provider_v1_tuple_proto_depIdxs = []int32{
 	3, // 0: kubling.provider.v1.Field.type:type_name -> kubling.v1.ValueType
-	4, // 1: kubling.provider.v1.Tuple.values:type_name -> kubling.v1.Value
-	0, // 2: kubling.provider.v1.TupleBatch.fields:type_name -> kubling.provider.v1.Field
-	1, // 3: kubling.provider.v1.TupleBatch.tuples:type_name -> kubling.provider.v1.Tuple
-	4, // [4:4] is the sub-list for method output_type
-	4, // [4:4] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	4, // 1: kubling.provider.v1.Field.type_descriptor:type_name -> kubling.v1.TypeDescriptor
+	5, // 2: kubling.provider.v1.Tuple.values:type_name -> kubling.v1.Value
+	0, // 3: kubling.provider.v1.TupleBatch.fields:type_name -> kubling.provider.v1.Field
+	1, // 4: kubling.provider.v1.TupleBatch.tuples:type_name -> kubling.provider.v1.Tuple
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_tuple_proto_init() }
