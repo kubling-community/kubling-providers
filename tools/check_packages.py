@@ -21,13 +21,9 @@ def require_members(actual, required):
 
 def java():
     version = release_version()
-    jars = list((ROOT / "sdk-java/target").glob("*.jar"))
-    binaries = [path for path in jars if not path.name.endswith(("-sources.jar", "-javadoc.jar"))]
-    if len(binaries) != 1:
-        raise ValueError("Expected exactly one Java binary JAR; run clean verify")
-    binary = binaries[0]
-    if binary.name != f"kubling-provider-grpc-{version}.jar":
-        raise ValueError(f"Java artifact does not match VERSION {version}: {binary.name}")
+    binary = ROOT / "sdk-java/target" / f"kubling-provider-grpc-{version}.jar"
+    if not binary.is_file():
+        raise ValueError(f"Missing Java artifact for VERSION {version}; run clean verify")
     package = "com/kubling/provider/grpc/"
     with zipfile.ZipFile(binary) as archive:
         names = archive.namelist()

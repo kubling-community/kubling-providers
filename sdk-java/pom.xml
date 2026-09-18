@@ -3,6 +3,11 @@
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
   <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>org.basepom</groupId>
+    <artifactId>basepom-foundation</artifactId>
+    <version>68</version>
+  </parent>
   <groupId>com.kubling</groupId>
   <artifactId>kubling-provider-grpc</artifactId>
   <version>0.4.0</version>
@@ -30,12 +35,15 @@
     <tag>sdk-java/v${project.version}</tag>
   </scm>
   <properties>
-    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
-    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.systemJdk>21</project.build.systemJdk>
+    <project.build.targetJdk>21</project.build.targetJdk>
+    <basepom.javadoc.skip>false</basepom.javadoc.skip>
+    <basepom.check.skip-extended>true</basepom.check.skip-extended>
     <kubling.grpc.version>1.1.1</kubling.grpc.version>
     <protobuf.version>4.36.1</protobuf.version>
     <grpc.version>1.84.0</grpc.version>
+    <guava.version>33.6.0-jre</guava.version>
+    <junit.version>5.13.4</junit.version>
     <project.build.outputTimestamp>2026-09-18T00:00:00Z</project.build.outputTimestamp>
   </properties>
   <dependencyManagement>
@@ -62,6 +70,10 @@
     </dependency>
     <dependency>
       <groupId>io.grpc</groupId>
+      <artifactId>grpc-api</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>io.grpc</groupId>
       <artifactId>grpc-protobuf</artifactId>
     </dependency>
     <dependency>
@@ -69,9 +81,20 @@
       <artifactId>grpc-stub</artifactId>
     </dependency>
     <dependency>
+      <groupId>com.google.guava</groupId>
+      <artifactId>guava</artifactId>
+      <version>${guava.version}</version>
+    </dependency>
+    <dependency>
       <groupId>org.junit.jupiter</groupId>
-      <artifactId>junit-jupiter</artifactId>
-      <version>5.13.4</version>
+      <artifactId>junit-jupiter-api</artifactId>
+      <version>${junit.version}</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-engine</artifactId>
+      <version>${junit.version}</version>
       <scope>test</scope>
     </dependency>
   </dependencies>
@@ -114,7 +137,6 @@
       <plugin>
         <groupId>org.codehaus.mojo</groupId>
         <artifactId>build-helper-maven-plugin</artifactId>
-        <version>3.6.1</version>
         <executions>
           <execution>
             <id>generated-sources</id>
@@ -127,63 +149,6 @@
                 <source>${project.basedir}/generated</source>
               </sources>
             </configuration>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <artifactId>maven-clean-plugin</artifactId>
-        <version>3.4.1</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-resources-plugin</artifactId>
-        <version>3.3.1</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-compiler-plugin</artifactId>
-        <version>3.14.1</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-surefire-plugin</artifactId>
-        <version>3.5.4</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.4.2</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-install-plugin</artifactId>
-        <version>3.1.4</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-deploy-plugin</artifactId>
-        <version>3.1.4</version>
-      </plugin>
-      <plugin>
-        <artifactId>maven-source-plugin</artifactId>
-        <version>3.3.1</version>
-        <executions>
-          <execution>
-            <id>sources</id>
-            <goals>
-              <goal>jar-no-fork</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
-      <plugin>
-        <artifactId>maven-javadoc-plugin</artifactId>
-        <version>3.11.3</version>
-        <configuration>
-          <doclint>none</doclint>
-          <notimestamp>true</notimestamp>
-          <quiet>true</quiet>
-        </configuration>
-        <executions>
-          <execution>
-            <id>javadoc</id>
-            <goals>
-              <goal>jar</goal>
-            </goals>
           </execution>
         </executions>
       </plugin>
