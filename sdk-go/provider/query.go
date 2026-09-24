@@ -24,7 +24,7 @@ func (s *Server) Query(
 	if err := validateQueryRequestValues(request); err != nil {
 		return status.Errorf(
 			codes.InvalidArgument,
-			"query contains an invalid value: %v",
+			"query is invalid: %v",
 			err,
 		)
 	}

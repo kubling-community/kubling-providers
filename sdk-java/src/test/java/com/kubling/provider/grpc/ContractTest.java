@@ -59,6 +59,45 @@ class ContractTest {
   }
 
   @Test
+  void preservesAggregatePushdownContract() throws Exception {
+    AggregateCall aggregate = AggregateCall.newBuilder()
+        .setFunction(AggregateFunction.AGGREGATE_FUNCTION_AVG)
+        .addArguments(Expression.newBuilder()
+            .setField(FieldReference.newBuilder().setName("amount")))
+        .setResultType(TypeDescriptor.newBuilder().setType(ValueType.VALUE_TYPE_DOUBLE))
+        .build();
+    QueryRequest request = QueryRequest.newBuilder()
+        .addProjections(Projection.newBuilder()
+            .setExpression(Expression.newBuilder().setAggregate(aggregate))
+            .setOutputName("average_amount"))
+        .addGroupBy(Expression.newBuilder()
+            .setField(FieldReference.newBuilder().setName("category")))
+        .setHaving(Expression.newBuilder()
+            .setLiteral(Literal.newBuilder()
+                .setValue(Value.newBuilder().setBooleanValue(true))))
+        .build();
+
+    QueryRequest decoded = QueryRequest.parseFrom(request.toByteArray());
+    assertEquals(
+        AggregateFunction.AGGREGATE_FUNCTION_AVG,
+        decoded.getProjections(0).getExpression().getAggregate().getFunction());
+    assertEquals(ValueType.VALUE_TYPE_DOUBLE,
+        decoded.getProjections(0).getExpression().getAggregate().getResultType().getType());
+    assertEquals("category", decoded.getGroupBy(0).getField().getName());
+    assertTrue(decoded.hasHaving());
+
+    AggregateCapabilities capabilities = AggregateCapabilities.newBuilder()
+        .addFunctions(AggregateFunction.AGGREGATE_FUNCTION_AVG)
+        .setDistinct(true)
+        .setGroupBy(true)
+        .setHaving(true)
+        .build();
+    assertEquals(
+        AggregateFunction.AGGREGATE_FUNCTION_AVG,
+        AggregateCapabilities.parseFrom(capabilities.toByteArray()).getFunctions(0));
+  }
+
+  @Test
   void exposesProviderAndLobServiceDescriptors() {
     assertEquals(
         MethodDescriptor.MethodType.SERVER_STREAMING,

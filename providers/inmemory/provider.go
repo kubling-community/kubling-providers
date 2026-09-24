@@ -3,6 +3,7 @@ package inmemory
 import (
 	"context"
 	_ "embed"
+	"log/slog"
 	"time"
 
 	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
@@ -16,12 +17,30 @@ var schemaDDL string
 
 // Provider exposes one in-memory sample data universe.
 type Provider struct {
-	store *store
+	store       *store
+	queryLogger *slog.Logger
+}
+
+// Option configures an in-memory provider.
+type Option func(*Provider)
+
+// WithQueryLogger enables safe query execution summaries. Values, predicates,
+// namespaces and connection identifiers are never logged.
+func WithQueryLogger(logger *slog.Logger) Option {
+	return func(provider *Provider) {
+		provider.queryLogger = logger
+	}
 }
 
 // New creates an in-memory provider with the canonical sample data.
-func New() *Provider {
-	return &Provider{store: newStore()}
+func New(options ...Option) *Provider {
+	provider := &Provider{store: newStore()}
+	for _, option := range options {
+		if option != nil {
+			option(provider)
+		}
+	}
+	return provider
 }
 
 // Capabilities describes the operations implemented by this provider.
@@ -38,6 +57,20 @@ func (p *Provider) Capabilities(
 		},
 		Query: &providerv1.QueryCapabilities{
 			RequiresCriteria: false,
+			Aggregates: &providerv1.AggregateCapabilities{
+				Functions: []providerv1.AggregateFunction{
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_MIN,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_SUM,
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_AVG,
+				},
+				Distinct: true,
+				GroupBy:  true,
+				Having:   true,
+			},
 			Ordering: &providerv1.OrderingCapabilities{
 				Supported:            true,
 				ExplicitNullOrdering: true,
@@ -125,8 +158,9 @@ func (p *Provider) Open(
 	_ context.Context,
 ) (providersdk.Connection, error) {
 	return &Connection{
-		store: p.store,
-		lobs:  make(map[string]inMemoryLob),
+		store:       p.store,
+		queryLogger: p.queryLogger,
+		lobs:        make(map[string]inMemoryLob),
 	}, nil
 }
 

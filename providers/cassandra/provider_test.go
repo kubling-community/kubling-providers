@@ -3,6 +3,7 @@ package cassandra
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -109,6 +110,9 @@ func TestProviderCapabilitiesAndHealth(t *testing.T) {
 		capabilities.GetQuery().GetPagination().GetOffset() {
 		t.Fatalf("Capabilities() query = %v", capabilities.GetQuery())
 	}
+	if capabilities.GetQuery().GetAggregates().GetFunctions() != nil {
+		t.Fatalf("Capabilities() aggregates = %v, want disabled", capabilities.GetQuery().GetAggregates())
+	}
 
 	health, err := provider.Health(context.Background())
 	if err != nil {
@@ -116,6 +120,30 @@ func TestProviderCapabilitiesAndHealth(t *testing.T) {
 	}
 	if !health.GetHealthy() {
 		t.Fatal("Health() healthy = false, want true")
+	}
+}
+
+func TestProviderAdvertisesConfiguredAggregatePushdown(t *testing.T) {
+	provider := newTestProvider(t, []string{"inventory"}, nil)
+	provider.config.Pushdown.Aggregates = true
+
+	capabilities, err := provider.Capabilities(context.Background())
+	if err != nil {
+		t.Fatalf("Capabilities() error = %v", err)
+	}
+	aggregates := capabilities.GetQuery().GetAggregates()
+	want := []providerv1.AggregateFunction{
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_MIN,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+	}
+	if !reflect.DeepEqual(aggregates.GetFunctions(), want) ||
+		aggregates.GetDistinct() ||
+		aggregates.GetGroupBy() ||
+		aggregates.GetHaving() {
+		t.Fatalf("Capabilities() aggregates = %v", aggregates)
 	}
 }
 

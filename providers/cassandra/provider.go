@@ -51,9 +51,22 @@ func newProvider(config Config, factory sessionFactory) *Provider {
 func (p *Provider) Capabilities(
 	context.Context,
 ) (*providersdk.Capabilities, error) {
+	var aggregates *providerv1.AggregateCapabilities
+	if p.config.Pushdown.Aggregates {
+		aggregates = &providerv1.AggregateCapabilities{
+			Functions: []providerv1.AggregateFunction{
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_MIN,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+			},
+		}
+	}
 	return &providersdk.Capabilities{
 		Transactions: &providerv1.TransactionCapabilities{Supported: false},
 		Query: &providerv1.QueryCapabilities{
+			Aggregates: aggregates,
 			Ordering: &providerv1.OrderingCapabilities{
 				Supported:            true,
 				ExplicitNullOrdering: false,

@@ -8,10 +8,12 @@ import (
 
 	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
+	"github.com/kubling-community/kubling-providers/providers/inmemory/internal/querylog"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 const defaultBatchSize = 100
@@ -66,6 +68,9 @@ func (c *Connection) Query(
 	}
 
 	rows := c.store.snapshot(entity)
+	if aggregateQuery(request) {
+		return c.queryAggregates(ctx, request, projections, rows)
+	}
 
 	plannedRows := make([]plannedRow, 0, len(rows))
 	for _, row := range rows {
@@ -153,6 +158,7 @@ func (c *Connection) Query(
 	for _, projection := range projections {
 		fields = append(fields, projection.field)
 	}
+	querylog.Executed(ctx, c.queryLogger, request, len(tuples))
 
 	return newResultStream(
 		fields,
@@ -250,6 +256,10 @@ func expressionTypeDescriptor(
 				Type:        kublingv1.ValueType_VALUE_TYPE_ARRAY,
 				ElementType: array.GetElementType(),
 			}
+		}
+	case *providerv1.Expression_Aggregate:
+		if kind.Aggregate != nil && kind.Aggregate.GetResultType() != nil {
+			return proto.Clone(kind.Aggregate.GetResultType()).(*kublingv1.TypeDescriptor)
 		}
 	}
 

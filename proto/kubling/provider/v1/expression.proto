@@ -22,6 +22,7 @@ message Expression {
     NullPredicate null_predicate = 5;
     FunctionCall function_call = 6;
     PatternExpression pattern = 7;
+    AggregateCall aggregate = 8;
   }
 }
 
@@ -129,4 +130,42 @@ message FunctionCall {
 
   // Ordered arguments supplied to the function.
   repeated Expression arguments = 2;
+}
+
+// Invocation of a logical Kubling aggregate.
+//
+// Aggregates are distinct from scalar functions because they operate over a
+// set of source rows. Kubling must only push down aggregates explicitly
+// declared by the provider and must retain them in the engine when its local
+// execution state, such as an MVCC overlay, contributes additional rows.
+message AggregateCall {
+  // Logical aggregate defined by Kubling.
+  AggregateFunction function = 1;
+
+  // Ordered aggregate arguments.
+  //
+  // COUNT_STAR takes no arguments. The remaining aggregates defined in this
+  // version take exactly one argument.
+  repeated Expression arguments = 2;
+
+  // Whether duplicate non-null argument values are removed before evaluating
+  // the aggregate. This must be false for COUNT_STAR.
+  bool distinct = 3;
+
+  // Logical result type expected by Kubling.
+  //
+  // Providers must return this exact type in the corresponding result field.
+  kubling.v1.TypeDescriptor result_type = 4;
+}
+
+// Standard aggregate functions understood by Kubling.
+enum AggregateFunction {
+  AGGREGATE_FUNCTION_UNSPECIFIED = 0;
+  AGGREGATE_FUNCTION_COUNT_STAR = 1;
+  AGGREGATE_FUNCTION_COUNT = 2;
+  AGGREGATE_FUNCTION_COUNT_BIG = 3;
+  AGGREGATE_FUNCTION_MIN = 4;
+  AGGREGATE_FUNCTION_MAX = 5;
+  AGGREGATE_FUNCTION_SUM = 6;
+  AGGREGATE_FUNCTION_AVG = 7;
 }

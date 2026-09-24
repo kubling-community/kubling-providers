@@ -56,6 +56,16 @@ message QueryRequest {
   // Providers must not emit an optional representation unless its canonical
   // feature name appears here, even when the provider advertises support.
   repeated string accepted_features = 9;
+
+  // Expressions that define aggregate groups.
+  //
+  // Kubling must only set this field when the provider advertises group_by.
+  repeated Expression group_by = 10;
+
+  // Optional expression applied after grouping and aggregate evaluation.
+  //
+  // Kubling must only set this field when the provider advertises having.
+  Expression having = 11;
 }
 
 // Logical entity exposed through the Kubling model.

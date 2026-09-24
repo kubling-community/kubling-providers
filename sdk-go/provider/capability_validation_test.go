@@ -52,6 +52,71 @@ func TestValidateProviderCapabilitiesAcceptsConsistentExtendedValues(t *testing.
 	}
 }
 
+func TestValidateProviderCapabilitiesAcceptsAggregateCapabilities(t *testing.T) {
+	capabilities := &Capabilities{Query: &providerv1.QueryCapabilities{
+		Aggregates: &providerv1.AggregateCapabilities{
+			Functions: []providerv1.AggregateFunction{
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_AVG,
+			},
+			Distinct: true,
+			GroupBy:  true,
+			Having:   true,
+		},
+	}}
+
+	if err := validateProviderCapabilities(capabilities); err != nil {
+		t.Fatalf("validateProviderCapabilities() error = %v", err)
+	}
+}
+
+func TestValidateProviderCapabilitiesRejectsInvalidAggregateFunctions(t *testing.T) {
+	tests := []struct {
+		name      string
+		functions []providerv1.AggregateFunction
+		wantText  string
+	}{
+		{
+			name: "unspecified",
+			functions: []providerv1.AggregateFunction{
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_UNSPECIFIED,
+			},
+			wantText: "AGGREGATE_FUNCTION_UNSPECIFIED",
+		},
+		{
+			name:      "unknown",
+			functions: []providerv1.AggregateFunction{99},
+			wantText:  "99 is unknown",
+		},
+		{
+			name: "duplicate",
+			functions: []providerv1.AggregateFunction{
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+			},
+			wantText: "duplicate AGGREGATE_FUNCTION_COUNT",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			capabilities := &Capabilities{Query: &providerv1.QueryCapabilities{
+				Aggregates: &providerv1.AggregateCapabilities{
+					Functions: test.functions,
+				},
+			}}
+			err := validateProviderCapabilities(capabilities)
+			if err == nil || !strings.Contains(err.Error(), test.wantText) {
+				t.Fatalf(
+					"validateProviderCapabilities() error = %v, want text %q",
+					err,
+					test.wantText,
+				)
+			}
+		})
+	}
+}
+
 func TestValidateProviderCapabilitiesRejectsContradictions(t *testing.T) {
 	positive32 := uint32(1)
 	zero32 := uint32(0)

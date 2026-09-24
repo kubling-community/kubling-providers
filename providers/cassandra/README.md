@@ -33,6 +33,11 @@ offsets or explicit null ordering. Cassandra's own partition and clustering
 rules still apply, so the database may reject a filter or ordering that is not
 valid for a particular table.
 
+Aggregate pushdown is disabled by default and can be enabled for a deployment
+with `pushdown.aggregates`. When enabled, the provider advertises exact native
+pushdown for counts, minimums and maximums. Other aggregates remain in Kubling
+because Cassandra's type and empty-input semantics do not match them exactly.
+
 Insert, update and delete operations also use parameterized CQL. Updates and
 deletes require a filter, primary-key columns cannot be updated, and inserts do
 not support generated or returning values. Cassandra does not report affected

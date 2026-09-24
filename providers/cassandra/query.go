@@ -2,6 +2,7 @@ package cassandra
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -22,13 +23,23 @@ func (c *Connection) Query(
 	if request.GetOffset() > 0 {
 		return nil, status.Error(codes.InvalidArgument, "Cassandra does not support offset")
 	}
+	if len(request.GetGroupBy()) > 0 || request.GetHaving() != nil {
+		return nil, status.Error(
+			codes.InvalidArgument,
+			"Cassandra aggregate pushdown does not support GROUP BY or HAVING",
+		)
+	}
 
 	entity, err := c.resolveEntity(ctx, request.GetEntity())
 	if err != nil {
 		return nil, err
 	}
 
-	projections, err := planQueryProjections(entity.table, request.GetProjections())
+	projections, err := planQueryProjectionsWithAggregates(
+		entity.table,
+		request.GetProjections(),
+		c.provider.config.Pushdown.Aggregates,
+	)
 	if err != nil {
 		entity.Close()
 		return nil, status.Errorf(codes.InvalidArgument, "plan Cassandra projections: %v", err)
@@ -36,6 +47,13 @@ func (c *Connection) Query(
 	if len(projections) == 0 {
 		entity.Close()
 		return nil, status.Error(codes.InvalidArgument, "query requires at least one projected column")
+	}
+	if containsAggregateProjection(projections) && len(request.GetOrderBy()) > 0 {
+		entity.Close()
+		return nil, status.Error(
+			codes.InvalidArgument,
+			"Cassandra aggregate pushdown does not support ordering",
+		)
 	}
 
 	filter, values, err := buildFilter(entity.table, request.GetFilter())
@@ -77,6 +95,14 @@ func (c *Connection) Query(
 		values,
 		queryPageSize(request.BatchSize),
 	)
+	if err := bindResultColumns(projections, iterator.Columns()); err != nil {
+		closeErr := iterator.Close()
+		entity.Close()
+		return nil, errors.Join(
+			status.Errorf(codes.Internal, "bind Cassandra result columns: %v", err),
+			closeErr,
+		)
+	}
 
 	return newCassandraResultStream(
 		entity,

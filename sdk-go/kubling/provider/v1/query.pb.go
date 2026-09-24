@@ -160,8 +160,16 @@ type QueryRequest struct {
 	// Providers must not emit an optional representation unless its canonical
 	// feature name appears here, even when the provider advertises support.
 	AcceptedFeatures []string `protobuf:"bytes,9,rep,name=accepted_features,json=acceptedFeatures,proto3" json:"accepted_features,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// Expressions that define aggregate groups.
+	//
+	// Kubling must only set this field when the provider advertises group_by.
+	GroupBy []*Expression `protobuf:"bytes,10,rep,name=group_by,json=groupBy,proto3" json:"group_by,omitempty"`
+	// Optional expression applied after grouping and aggregate evaluation.
+	//
+	// Kubling must only set this field when the provider advertises having.
+	Having        *Expression `protobuf:"bytes,11,opt,name=having,proto3" json:"having,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *QueryRequest) Reset() {
@@ -253,6 +261,20 @@ func (x *QueryRequest) GetBatchSize() uint32 {
 func (x *QueryRequest) GetAcceptedFeatures() []string {
 	if x != nil {
 		return x.AcceptedFeatures
+	}
+	return nil
+}
+
+func (x *QueryRequest) GetGroupBy() []*Expression {
+	if x != nil {
+		return x.GroupBy
+	}
+	return nil
+}
+
+func (x *QueryRequest) GetHaving() *Expression {
+	if x != nil {
+		return x.Having
 	}
 	return nil
 }
@@ -483,7 +505,7 @@ var File_kubling_provider_v1_query_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\n" +
-	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xd3\x03\n" +
+	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xc8\x04\n" +
 	"\fQueryRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12<\n" +
 	"\x06entity\x18\x02 \x01(\v2$.kubling.provider.v1.EntityReferenceR\x06entity\x12A\n" +
@@ -494,7 +516,10 @@ const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\x06offset\x18\a \x01(\x04H\x01R\x06offset\x88\x01\x01\x12\"\n" +
 	"\n" +
 	"batch_size\x18\b \x01(\rH\x02R\tbatchSize\x88\x01\x01\x12+\n" +
-	"\x11accepted_features\x18\t \x03(\tR\x10acceptedFeaturesB\b\n" +
+	"\x11accepted_features\x18\t \x03(\tR\x10acceptedFeatures\x12:\n" +
+	"\bgroup_by\x18\n" +
+	" \x03(\v2\x1f.kubling.provider.v1.ExpressionR\agroupBy\x127\n" +
+	"\x06having\x18\v \x01(\v2\x1f.kubling.provider.v1.ExpressionR\x06havingB\b\n" +
 	"\x06_limitB\t\n" +
 	"\a_offsetB\r\n" +
 	"\v_batch_size\"C\n" +
@@ -553,20 +578,22 @@ var file_kubling_provider_v1_query_proto_goTypes = []any{
 	(*TupleBatch)(nil),      // 8: kubling.provider.v1.TupleBatch
 }
 var file_kubling_provider_v1_query_proto_depIdxs = []int32{
-	3, // 0: kubling.provider.v1.QueryRequest.entity:type_name -> kubling.provider.v1.EntityReference
-	4, // 1: kubling.provider.v1.QueryRequest.projections:type_name -> kubling.provider.v1.Projection
-	7, // 2: kubling.provider.v1.QueryRequest.filter:type_name -> kubling.provider.v1.Expression
-	5, // 3: kubling.provider.v1.QueryRequest.order_by:type_name -> kubling.provider.v1.OrderBy
-	7, // 4: kubling.provider.v1.Projection.expression:type_name -> kubling.provider.v1.Expression
-	7, // 5: kubling.provider.v1.OrderBy.expression:type_name -> kubling.provider.v1.Expression
-	0, // 6: kubling.provider.v1.OrderBy.direction:type_name -> kubling.provider.v1.SortDirection
-	1, // 7: kubling.provider.v1.OrderBy.null_ordering:type_name -> kubling.provider.v1.NullOrdering
-	8, // 8: kubling.provider.v1.QueryResponse.batch:type_name -> kubling.provider.v1.TupleBatch
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	3,  // 0: kubling.provider.v1.QueryRequest.entity:type_name -> kubling.provider.v1.EntityReference
+	4,  // 1: kubling.provider.v1.QueryRequest.projections:type_name -> kubling.provider.v1.Projection
+	7,  // 2: kubling.provider.v1.QueryRequest.filter:type_name -> kubling.provider.v1.Expression
+	5,  // 3: kubling.provider.v1.QueryRequest.order_by:type_name -> kubling.provider.v1.OrderBy
+	7,  // 4: kubling.provider.v1.QueryRequest.group_by:type_name -> kubling.provider.v1.Expression
+	7,  // 5: kubling.provider.v1.QueryRequest.having:type_name -> kubling.provider.v1.Expression
+	7,  // 6: kubling.provider.v1.Projection.expression:type_name -> kubling.provider.v1.Expression
+	7,  // 7: kubling.provider.v1.OrderBy.expression:type_name -> kubling.provider.v1.Expression
+	0,  // 8: kubling.provider.v1.OrderBy.direction:type_name -> kubling.provider.v1.SortDirection
+	1,  // 9: kubling.provider.v1.OrderBy.null_ordering:type_name -> kubling.provider.v1.NullOrdering
+	8,  // 10: kubling.provider.v1.QueryResponse.batch:type_name -> kubling.provider.v1.TupleBatch
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_query_proto_init() }

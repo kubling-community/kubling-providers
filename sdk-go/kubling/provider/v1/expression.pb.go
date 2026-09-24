@@ -237,6 +237,71 @@ func (PatternOperator) EnumDescriptor() ([]byte, []int) {
 	return file_kubling_provider_v1_expression_proto_rawDescGZIP(), []int{3}
 }
 
+// Standard aggregate functions understood by Kubling.
+type AggregateFunction int32
+
+const (
+	AggregateFunction_AGGREGATE_FUNCTION_UNSPECIFIED AggregateFunction = 0
+	AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR  AggregateFunction = 1
+	AggregateFunction_AGGREGATE_FUNCTION_COUNT       AggregateFunction = 2
+	AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG   AggregateFunction = 3
+	AggregateFunction_AGGREGATE_FUNCTION_MIN         AggregateFunction = 4
+	AggregateFunction_AGGREGATE_FUNCTION_MAX         AggregateFunction = 5
+	AggregateFunction_AGGREGATE_FUNCTION_SUM         AggregateFunction = 6
+	AggregateFunction_AGGREGATE_FUNCTION_AVG         AggregateFunction = 7
+)
+
+// Enum value maps for AggregateFunction.
+var (
+	AggregateFunction_name = map[int32]string{
+		0: "AGGREGATE_FUNCTION_UNSPECIFIED",
+		1: "AGGREGATE_FUNCTION_COUNT_STAR",
+		2: "AGGREGATE_FUNCTION_COUNT",
+		3: "AGGREGATE_FUNCTION_COUNT_BIG",
+		4: "AGGREGATE_FUNCTION_MIN",
+		5: "AGGREGATE_FUNCTION_MAX",
+		6: "AGGREGATE_FUNCTION_SUM",
+		7: "AGGREGATE_FUNCTION_AVG",
+	}
+	AggregateFunction_value = map[string]int32{
+		"AGGREGATE_FUNCTION_UNSPECIFIED": 0,
+		"AGGREGATE_FUNCTION_COUNT_STAR":  1,
+		"AGGREGATE_FUNCTION_COUNT":       2,
+		"AGGREGATE_FUNCTION_COUNT_BIG":   3,
+		"AGGREGATE_FUNCTION_MIN":         4,
+		"AGGREGATE_FUNCTION_MAX":         5,
+		"AGGREGATE_FUNCTION_SUM":         6,
+		"AGGREGATE_FUNCTION_AVG":         7,
+	}
+)
+
+func (x AggregateFunction) Enum() *AggregateFunction {
+	p := new(AggregateFunction)
+	*p = x
+	return p
+}
+
+func (x AggregateFunction) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AggregateFunction) Descriptor() protoreflect.EnumDescriptor {
+	return file_kubling_provider_v1_expression_proto_enumTypes[4].Descriptor()
+}
+
+func (AggregateFunction) Type() protoreflect.EnumType {
+	return &file_kubling_provider_v1_expression_proto_enumTypes[4]
+}
+
+func (x AggregateFunction) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AggregateFunction.Descriptor instead.
+func (AggregateFunction) EnumDescriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_expression_proto_rawDescGZIP(), []int{4}
+}
+
 // Expression that may be evaluated by a provider.
 //
 // Kubling must only send expressions declared as supported through the
@@ -252,6 +317,7 @@ type Expression struct {
 	//	*Expression_NullPredicate
 	//	*Expression_FunctionCall
 	//	*Expression_Pattern
+	//	*Expression_Aggregate
 	Kind          isExpression_Kind `protobuf_oneof:"kind"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -357,6 +423,15 @@ func (x *Expression) GetPattern() *PatternExpression {
 	return nil
 }
 
+func (x *Expression) GetAggregate() *AggregateCall {
+	if x != nil {
+		if x, ok := x.Kind.(*Expression_Aggregate); ok {
+			return x.Aggregate
+		}
+	}
+	return nil
+}
+
 type isExpression_Kind interface {
 	isExpression_Kind()
 }
@@ -389,6 +464,10 @@ type Expression_Pattern struct {
 	Pattern *PatternExpression `protobuf:"bytes,7,opt,name=pattern,proto3,oneof"`
 }
 
+type Expression_Aggregate struct {
+	Aggregate *AggregateCall `protobuf:"bytes,8,opt,name=aggregate,proto3,oneof"`
+}
+
 func (*Expression_Field) isExpression_Kind() {}
 
 func (*Expression_Literal) isExpression_Kind() {}
@@ -402,6 +481,8 @@ func (*Expression_NullPredicate) isExpression_Kind() {}
 func (*Expression_FunctionCall) isExpression_Kind() {}
 
 func (*Expression_Pattern) isExpression_Kind() {}
+
+func (*Expression_Aggregate) isExpression_Kind() {}
 
 // Reference to a logical field in the queried entity.
 type FieldReference struct {
@@ -813,11 +894,95 @@ func (x *FunctionCall) GetArguments() []*Expression {
 	return nil
 }
 
+// Invocation of a logical Kubling aggregate.
+//
+// Aggregates are distinct from scalar functions because they operate over a
+// set of source rows. Kubling must only push down aggregates explicitly
+// declared by the provider and must retain them in the engine when its local
+// execution state, such as an MVCC overlay, contributes additional rows.
+type AggregateCall struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Logical aggregate defined by Kubling.
+	Function AggregateFunction `protobuf:"varint,1,opt,name=function,proto3,enum=kubling.provider.v1.AggregateFunction" json:"function,omitempty"`
+	// Ordered aggregate arguments.
+	//
+	// COUNT_STAR takes no arguments. The remaining aggregates defined in this
+	// version take exactly one argument.
+	Arguments []*Expression `protobuf:"bytes,2,rep,name=arguments,proto3" json:"arguments,omitempty"`
+	// Whether duplicate non-null argument values are removed before evaluating
+	// the aggregate. This must be false for COUNT_STAR.
+	Distinct bool `protobuf:"varint,3,opt,name=distinct,proto3" json:"distinct,omitempty"`
+	// Logical result type expected by Kubling.
+	//
+	// Providers must return this exact type in the corresponding result field.
+	ResultType    *v1.TypeDescriptor `protobuf:"bytes,4,opt,name=result_type,json=resultType,proto3" json:"result_type,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AggregateCall) Reset() {
+	*x = AggregateCall{}
+	mi := &file_kubling_provider_v1_expression_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AggregateCall) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AggregateCall) ProtoMessage() {}
+
+func (x *AggregateCall) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_expression_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AggregateCall.ProtoReflect.Descriptor instead.
+func (*AggregateCall) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_expression_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AggregateCall) GetFunction() AggregateFunction {
+	if x != nil {
+		return x.Function
+	}
+	return AggregateFunction_AGGREGATE_FUNCTION_UNSPECIFIED
+}
+
+func (x *AggregateCall) GetArguments() []*Expression {
+	if x != nil {
+		return x.Arguments
+	}
+	return nil
+}
+
+func (x *AggregateCall) GetDistinct() bool {
+	if x != nil {
+		return x.Distinct
+	}
+	return false
+}
+
+func (x *AggregateCall) GetResultType() *v1.TypeDescriptor {
+	if x != nil {
+		return x.ResultType
+	}
+	return nil
+}
+
 var File_kubling_provider_v1_expression_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_expression_proto_rawDesc = "" +
 	"\n" +
-	"$kubling/provider/v1/expression.proto\x12\x13kubling.provider.v1\x1a\x16kubling/v1/value.proto\"\xf7\x03\n" +
+	"$kubling/provider/v1/expression.proto\x12\x13kubling.provider.v1\x1a\x16kubling/v1/value.proto\"\xbb\x04\n" +
 	"\n" +
 	"Expression\x12;\n" +
 	"\x05field\x18\x01 \x01(\v2#.kubling.provider.v1.FieldReferenceH\x00R\x05field\x128\n" +
@@ -828,7 +993,8 @@ const file_kubling_provider_v1_expression_proto_rawDesc = "" +
 	"\alogical\x18\x04 \x01(\v2&.kubling.provider.v1.LogicalExpressionH\x00R\alogical\x12K\n" +
 	"\x0enull_predicate\x18\x05 \x01(\v2\".kubling.provider.v1.NullPredicateH\x00R\rnullPredicate\x12H\n" +
 	"\rfunction_call\x18\x06 \x01(\v2!.kubling.provider.v1.FunctionCallH\x00R\ffunctionCall\x12B\n" +
-	"\apattern\x18\a \x01(\v2&.kubling.provider.v1.PatternExpressionH\x00R\apatternB\x06\n" +
+	"\apattern\x18\a \x01(\v2&.kubling.provider.v1.PatternExpressionH\x00R\apattern\x12B\n" +
+	"\taggregate\x18\b \x01(\v2\".kubling.provider.v1.AggregateCallH\x00R\taggregateB\x06\n" +
 	"\x04kind\"$\n" +
 	"\x0eFieldReference\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\"s\n" +
@@ -855,7 +1021,13 @@ const file_kubling_provider_v1_expression_proto_rawDesc = "" +
 	"\a_escape\"a\n" +
 	"\fFunctionCall\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12=\n" +
-	"\targuments\x18\x02 \x03(\v2\x1f.kubling.provider.v1.ExpressionR\targuments*\x9f\x02\n" +
+	"\targuments\x18\x02 \x03(\v2\x1f.kubling.provider.v1.ExpressionR\targuments\"\xeb\x01\n" +
+	"\rAggregateCall\x12B\n" +
+	"\bfunction\x18\x01 \x01(\x0e2&.kubling.provider.v1.AggregateFunctionR\bfunction\x12=\n" +
+	"\targuments\x18\x02 \x03(\v2\x1f.kubling.provider.v1.ExpressionR\targuments\x12\x1a\n" +
+	"\bdistinct\x18\x03 \x01(\bR\bdistinct\x12;\n" +
+	"\vresult_type\x18\x04 \x01(\v2\x1a.kubling.v1.TypeDescriptorR\n" +
+	"resultType*\x9f\x02\n" +
 	"\x12ComparisonOperator\x12#\n" +
 	"\x1fCOMPARISON_OPERATOR_UNSPECIFIED\x10\x00\x12\x1d\n" +
 	"\x19COMPARISON_OPERATOR_EQUAL\x10\x01\x12!\n" +
@@ -876,7 +1048,16 @@ const file_kubling_provider_v1_expression_proto_rawDesc = "" +
 	"\x0fPatternOperator\x12 \n" +
 	"\x1cPATTERN_OPERATOR_UNSPECIFIED\x10\x00\x12\x19\n" +
 	"\x15PATTERN_OPERATOR_LIKE\x10\x01\x12\x1d\n" +
-	"\x19PATTERN_OPERATOR_NOT_LIKE\x10\x02B\x84\x01\n" +
+	"\x19PATTERN_OPERATOR_NOT_LIKE\x10\x02*\x8a\x02\n" +
+	"\x11AggregateFunction\x12\"\n" +
+	"\x1eAGGREGATE_FUNCTION_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dAGGREGATE_FUNCTION_COUNT_STAR\x10\x01\x12\x1c\n" +
+	"\x18AGGREGATE_FUNCTION_COUNT\x10\x02\x12 \n" +
+	"\x1cAGGREGATE_FUNCTION_COUNT_BIG\x10\x03\x12\x1a\n" +
+	"\x16AGGREGATE_FUNCTION_MIN\x10\x04\x12\x1a\n" +
+	"\x16AGGREGATE_FUNCTION_MAX\x10\x05\x12\x1a\n" +
+	"\x16AGGREGATE_FUNCTION_SUM\x10\x06\x12\x1a\n" +
+	"\x16AGGREGATE_FUNCTION_AVG\x10\aB\x84\x01\n" +
 	"\x19com.kubling.provider.grpcB\x0fExpressionProtoP\x01ZTgithub.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1b\x06proto3"
 
 var (
@@ -891,50 +1072,56 @@ func file_kubling_provider_v1_expression_proto_rawDescGZIP() []byte {
 	return file_kubling_provider_v1_expression_proto_rawDescData
 }
 
-var file_kubling_provider_v1_expression_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_kubling_provider_v1_expression_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_kubling_provider_v1_expression_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
+var file_kubling_provider_v1_expression_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_kubling_provider_v1_expression_proto_goTypes = []any{
 	(ComparisonOperator)(0),      // 0: kubling.provider.v1.ComparisonOperator
 	(LogicalOperator)(0),         // 1: kubling.provider.v1.LogicalOperator
 	(NullPredicateOperator)(0),   // 2: kubling.provider.v1.NullPredicateOperator
 	(PatternOperator)(0),         // 3: kubling.provider.v1.PatternOperator
-	(*Expression)(nil),           // 4: kubling.provider.v1.Expression
-	(*FieldReference)(nil),       // 5: kubling.provider.v1.FieldReference
-	(*Literal)(nil),              // 6: kubling.provider.v1.Literal
-	(*ComparisonExpression)(nil), // 7: kubling.provider.v1.ComparisonExpression
-	(*LogicalExpression)(nil),    // 8: kubling.provider.v1.LogicalExpression
-	(*NullPredicate)(nil),        // 9: kubling.provider.v1.NullPredicate
-	(*PatternExpression)(nil),    // 10: kubling.provider.v1.PatternExpression
-	(*FunctionCall)(nil),         // 11: kubling.provider.v1.FunctionCall
-	(*v1.Value)(nil),             // 12: kubling.v1.Value
-	(*v1.TypeDescriptor)(nil),    // 13: kubling.v1.TypeDescriptor
+	(AggregateFunction)(0),       // 4: kubling.provider.v1.AggregateFunction
+	(*Expression)(nil),           // 5: kubling.provider.v1.Expression
+	(*FieldReference)(nil),       // 6: kubling.provider.v1.FieldReference
+	(*Literal)(nil),              // 7: kubling.provider.v1.Literal
+	(*ComparisonExpression)(nil), // 8: kubling.provider.v1.ComparisonExpression
+	(*LogicalExpression)(nil),    // 9: kubling.provider.v1.LogicalExpression
+	(*NullPredicate)(nil),        // 10: kubling.provider.v1.NullPredicate
+	(*PatternExpression)(nil),    // 11: kubling.provider.v1.PatternExpression
+	(*FunctionCall)(nil),         // 12: kubling.provider.v1.FunctionCall
+	(*AggregateCall)(nil),        // 13: kubling.provider.v1.AggregateCall
+	(*v1.Value)(nil),             // 14: kubling.v1.Value
+	(*v1.TypeDescriptor)(nil),    // 15: kubling.v1.TypeDescriptor
 }
 var file_kubling_provider_v1_expression_proto_depIdxs = []int32{
-	5,  // 0: kubling.provider.v1.Expression.field:type_name -> kubling.provider.v1.FieldReference
-	6,  // 1: kubling.provider.v1.Expression.literal:type_name -> kubling.provider.v1.Literal
-	7,  // 2: kubling.provider.v1.Expression.comparison:type_name -> kubling.provider.v1.ComparisonExpression
-	8,  // 3: kubling.provider.v1.Expression.logical:type_name -> kubling.provider.v1.LogicalExpression
-	9,  // 4: kubling.provider.v1.Expression.null_predicate:type_name -> kubling.provider.v1.NullPredicate
-	11, // 5: kubling.provider.v1.Expression.function_call:type_name -> kubling.provider.v1.FunctionCall
-	10, // 6: kubling.provider.v1.Expression.pattern:type_name -> kubling.provider.v1.PatternExpression
-	12, // 7: kubling.provider.v1.Literal.value:type_name -> kubling.v1.Value
-	13, // 8: kubling.provider.v1.Literal.declared_type:type_name -> kubling.v1.TypeDescriptor
-	0,  // 9: kubling.provider.v1.ComparisonExpression.operator:type_name -> kubling.provider.v1.ComparisonOperator
-	4,  // 10: kubling.provider.v1.ComparisonExpression.left:type_name -> kubling.provider.v1.Expression
-	4,  // 11: kubling.provider.v1.ComparisonExpression.right:type_name -> kubling.provider.v1.Expression
-	1,  // 12: kubling.provider.v1.LogicalExpression.operator:type_name -> kubling.provider.v1.LogicalOperator
-	4,  // 13: kubling.provider.v1.LogicalExpression.operands:type_name -> kubling.provider.v1.Expression
-	2,  // 14: kubling.provider.v1.NullPredicate.operator:type_name -> kubling.provider.v1.NullPredicateOperator
-	4,  // 15: kubling.provider.v1.NullPredicate.expression:type_name -> kubling.provider.v1.Expression
-	3,  // 16: kubling.provider.v1.PatternExpression.operator:type_name -> kubling.provider.v1.PatternOperator
-	4,  // 17: kubling.provider.v1.PatternExpression.value:type_name -> kubling.provider.v1.Expression
-	4,  // 18: kubling.provider.v1.PatternExpression.pattern:type_name -> kubling.provider.v1.Expression
-	4,  // 19: kubling.provider.v1.FunctionCall.arguments:type_name -> kubling.provider.v1.Expression
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	6,  // 0: kubling.provider.v1.Expression.field:type_name -> kubling.provider.v1.FieldReference
+	7,  // 1: kubling.provider.v1.Expression.literal:type_name -> kubling.provider.v1.Literal
+	8,  // 2: kubling.provider.v1.Expression.comparison:type_name -> kubling.provider.v1.ComparisonExpression
+	9,  // 3: kubling.provider.v1.Expression.logical:type_name -> kubling.provider.v1.LogicalExpression
+	10, // 4: kubling.provider.v1.Expression.null_predicate:type_name -> kubling.provider.v1.NullPredicate
+	12, // 5: kubling.provider.v1.Expression.function_call:type_name -> kubling.provider.v1.FunctionCall
+	11, // 6: kubling.provider.v1.Expression.pattern:type_name -> kubling.provider.v1.PatternExpression
+	13, // 7: kubling.provider.v1.Expression.aggregate:type_name -> kubling.provider.v1.AggregateCall
+	14, // 8: kubling.provider.v1.Literal.value:type_name -> kubling.v1.Value
+	15, // 9: kubling.provider.v1.Literal.declared_type:type_name -> kubling.v1.TypeDescriptor
+	0,  // 10: kubling.provider.v1.ComparisonExpression.operator:type_name -> kubling.provider.v1.ComparisonOperator
+	5,  // 11: kubling.provider.v1.ComparisonExpression.left:type_name -> kubling.provider.v1.Expression
+	5,  // 12: kubling.provider.v1.ComparisonExpression.right:type_name -> kubling.provider.v1.Expression
+	1,  // 13: kubling.provider.v1.LogicalExpression.operator:type_name -> kubling.provider.v1.LogicalOperator
+	5,  // 14: kubling.provider.v1.LogicalExpression.operands:type_name -> kubling.provider.v1.Expression
+	2,  // 15: kubling.provider.v1.NullPredicate.operator:type_name -> kubling.provider.v1.NullPredicateOperator
+	5,  // 16: kubling.provider.v1.NullPredicate.expression:type_name -> kubling.provider.v1.Expression
+	3,  // 17: kubling.provider.v1.PatternExpression.operator:type_name -> kubling.provider.v1.PatternOperator
+	5,  // 18: kubling.provider.v1.PatternExpression.value:type_name -> kubling.provider.v1.Expression
+	5,  // 19: kubling.provider.v1.PatternExpression.pattern:type_name -> kubling.provider.v1.Expression
+	5,  // 20: kubling.provider.v1.FunctionCall.arguments:type_name -> kubling.provider.v1.Expression
+	4,  // 21: kubling.provider.v1.AggregateCall.function:type_name -> kubling.provider.v1.AggregateFunction
+	5,  // 22: kubling.provider.v1.AggregateCall.arguments:type_name -> kubling.provider.v1.Expression
+	15, // 23: kubling.provider.v1.AggregateCall.result_type:type_name -> kubling.v1.TypeDescriptor
+	24, // [24:24] is the sub-list for method output_type
+	24, // [24:24] is the sub-list for method input_type
+	24, // [24:24] is the sub-list for extension type_name
+	24, // [24:24] is the sub-list for extension extendee
+	0,  // [0:24] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_expression_proto_init() }
@@ -950,6 +1137,7 @@ func file_kubling_provider_v1_expression_proto_init() {
 		(*Expression_NullPredicate)(nil),
 		(*Expression_FunctionCall)(nil),
 		(*Expression_Pattern)(nil),
+		(*Expression_Aggregate)(nil),
 	}
 	file_kubling_provider_v1_expression_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
@@ -957,8 +1145,8 @@ func file_kubling_provider_v1_expression_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kubling_provider_v1_expression_proto_rawDesc), len(file_kubling_provider_v1_expression_proto_rawDesc)),
-			NumEnums:      4,
-			NumMessages:   8,
+			NumEnums:      5,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

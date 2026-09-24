@@ -12,6 +12,7 @@ import (
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 )
 
 type cassandraResultStream struct {
@@ -35,9 +36,16 @@ func newCassandraResultStream(
 ) providersdk.ResultStream {
 	fields := make([]*providerv1.Field, 0, len(projections))
 	for _, projection := range projections {
+		valueType := logicalValueType(projection.column.Type)
+		var typeDescriptor *kublingv1.TypeDescriptor
+		if projection.resultType != nil {
+			valueType = projection.resultType.GetType()
+			typeDescriptor = proto.Clone(projection.resultType).(*kublingv1.TypeDescriptor)
+		}
 		fields = append(fields, &providerv1.Field{
-			Name: projection.outputName,
-			Type: logicalValueType(projection.column.Type),
+			Name:           projection.outputName,
+			Type:           valueType,
+			TypeDescriptor: typeDescriptor,
 		})
 	}
 
@@ -105,6 +113,22 @@ func (s *cassandraResultStream) Next(
 					),
 					closeErr,
 				)
+			}
+			if projection.resultType != nil {
+				value, err = coerceAggregateResult(value, projection.resultType)
+				if err != nil {
+					closeErr := s.closeIteratorLocked()
+					s.done = true
+					return nil, errors.Join(
+						status.Errorf(
+							codes.Internal,
+							"convert Cassandra aggregate %q: %v",
+							projection.outputName,
+							err,
+						),
+						closeErr,
+					)
+				}
 			}
 			values = append(values, value)
 		}

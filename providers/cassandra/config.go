@@ -27,6 +27,7 @@ const (
 type Config struct {
 	DataSources     map[string]DataSourceConfig
 	NamespaceColumn NamespaceColumnConfig
+	Pushdown        PushdownConfig
 }
 
 // NamespaceColumnConfig controls whether source namespaces are exposed as a
@@ -34,6 +35,11 @@ type Config struct {
 type NamespaceColumnConfig struct {
 	Enabled bool
 	Name    string
+}
+
+// PushdownConfig controls optional operations that execute in Cassandra.
+type PushdownConfig struct {
+	Aggregates bool
 }
 
 // DataSourceConfig configures one Cassandra keyspace.
@@ -62,12 +68,17 @@ type TLSConfig struct {
 
 type fileConfig struct {
 	NamespaceColumn fileNamespaceColumnConfig       `yaml:"namespaceColumn"`
+	Pushdown        filePushdownConfig              `yaml:"pushdown"`
 	Namespaces      map[string]fileDataSourceConfig `yaml:"namespaces"`
 }
 
 type fileNamespaceColumnConfig struct {
 	Enabled bool   `yaml:"enabled"`
 	Name    string `yaml:"name"`
+}
+
+type filePushdownConfig struct {
+	Aggregates bool `yaml:"aggregates"`
 }
 
 type fileDataSourceConfig struct {
@@ -121,6 +132,9 @@ func LoadConfig(path string) (Config, error) {
 		NamespaceColumn: NamespaceColumnConfig{
 			Enabled: serialized.NamespaceColumn.Enabled,
 			Name:    serialized.NamespaceColumn.Name,
+		},
+		Pushdown: PushdownConfig{
+			Aggregates: serialized.Pushdown.Aggregates,
 		},
 	}
 	for namespace, serializedDataSource := range serialized.Namespaces {
@@ -189,6 +203,7 @@ func normalizeConfig(config Config) (Config, error) {
 
 	normalized := Config{
 		DataSources: make(map[string]DataSourceConfig, len(config.DataSources)),
+		Pushdown:    config.Pushdown,
 	}
 	namespaceColumn, err := normalizeNamespaceColumnConfig(config.NamespaceColumn)
 	if err != nil {

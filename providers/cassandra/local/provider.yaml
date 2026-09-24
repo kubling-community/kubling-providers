@@ -1,6 +1,9 @@
 namespaceColumn:
   enabled: true
 
+pushdown:
+  aggregates: true
+
 namespaces:
   sample:
     hosts:

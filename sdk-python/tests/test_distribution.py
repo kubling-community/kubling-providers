@@ -9,6 +9,7 @@ from kubling.provider.v1 import (
     capabilities_pb2,
     expression_pb2,
     provider_pb2_grpc,
+    query_pb2,
     tuple_pb2,
 )
 from kubling.v1 import value_pb2
@@ -80,6 +81,59 @@ class DistributionTest(unittest.TestCase):
             capabilities_pb2.ValueCapabilities.FromString(
                 capabilities.SerializeToString()
             ).HasField("max_array_dimensions")
+        )
+
+    def test_preserves_aggregate_pushdown_contract(self):
+        aggregate = expression_pb2.AggregateCall(
+            function=expression_pb2.AGGREGATE_FUNCTION_AVG,
+            arguments=[
+                expression_pb2.Expression(
+                    field=expression_pb2.FieldReference(name="amount")
+                )
+            ],
+            result_type=value_pb2.TypeDescriptor(type=value_pb2.VALUE_TYPE_DOUBLE),
+        )
+        request = query_pb2.QueryRequest(
+            projections=[
+                query_pb2.Projection(
+                    expression=expression_pb2.Expression(aggregate=aggregate),
+                    output_name="average_amount",
+                )
+            ],
+            group_by=[
+                expression_pb2.Expression(
+                    field=expression_pb2.FieldReference(name="category")
+                )
+            ],
+            having=expression_pb2.Expression(
+                literal=expression_pb2.Literal(
+                    value=value_pb2.Value(boolean_value=True)
+                )
+            ),
+        )
+        decoded = query_pb2.QueryRequest.FromString(request.SerializeToString())
+        self.assertEqual(
+            decoded.projections[0].expression.aggregate.function,
+            expression_pb2.AGGREGATE_FUNCTION_AVG,
+        )
+        self.assertEqual(
+            decoded.projections[0].expression.aggregate.result_type.type,
+            value_pb2.VALUE_TYPE_DOUBLE,
+        )
+        self.assertEqual(decoded.group_by[0].field.name, "category")
+        self.assertTrue(decoded.HasField("having"))
+
+        capabilities = capabilities_pb2.AggregateCapabilities(
+            functions=[expression_pb2.AGGREGATE_FUNCTION_AVG],
+            distinct=True,
+            group_by=True,
+            having=True,
+        )
+        self.assertEqual(
+            capabilities_pb2.AggregateCapabilities.FromString(
+                capabilities.SerializeToString()
+            ).functions[0],
+            expression_pb2.AGGREGATE_FUNCTION_AVG,
         )
 
     def test_constructs_provider_stub_without_connecting(self):
