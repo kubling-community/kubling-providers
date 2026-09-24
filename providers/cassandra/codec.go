@@ -12,6 +12,7 @@ import (
 
 	"github.com/apache/cassandra-gocql-driver/v2"
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
+	"google.golang.org/protobuf/proto"
 	"gopkg.in/inf.v0"
 )
 
@@ -147,6 +148,99 @@ func nativeToValue(
 		}}, nil
 	default:
 		return nil, fmt.Errorf("unsupported Cassandra type %s", nativeTypeName(typeInfo))
+	}
+}
+
+func coerceAggregateResult(
+	value *kublingv1.Value,
+	resultType *kublingv1.TypeDescriptor,
+) (*kublingv1.Value, error) {
+	if value == nil || value.GetNullValue() != nil {
+		return nullProviderValue(), nil
+	}
+	if resultType == nil {
+		return nil, fmt.Errorf("aggregate result type is required")
+	}
+	actualType, err := providerValueType(value)
+	if err != nil {
+		return nil, err
+	}
+	if actualType == resultType.GetType() {
+		return proto.Clone(value).(*kublingv1.Value), nil
+	}
+
+	switch resultType.GetType() {
+	case kublingv1.ValueType_VALUE_TYPE_INTEGER:
+		converted, err := providerInteger(value, 32)
+		if err != nil {
+			return nil, err
+		}
+		return &kublingv1.Value{Kind: &kublingv1.Value_IntegerValue{
+			IntegerValue: int32(converted),
+		}}, nil
+	case kublingv1.ValueType_VALUE_TYPE_LONG:
+		converted, err := providerInteger(value, 64)
+		if err != nil {
+			return nil, err
+		}
+		return &kublingv1.Value{Kind: &kublingv1.Value_LongValue{
+			LongValue: converted,
+		}}, nil
+	case kublingv1.ValueType_VALUE_TYPE_BIGINTEGER:
+		text, err := providerNumberString(value)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := new(big.Int).SetString(text, 10); !ok {
+			return nil, fmt.Errorf("aggregate result %q is not an integer", text)
+		}
+		return &kublingv1.Value{Kind: &kublingv1.Value_BigintegerValue{
+			BigintegerValue: text,
+		}}, nil
+	default:
+		return nil, fmt.Errorf(
+			"cannot coerce Cassandra %s aggregate result to %s",
+			actualType,
+			resultType.GetType(),
+		)
+	}
+}
+
+func providerValueType(value *kublingv1.Value) (kublingv1.ValueType, error) {
+	switch value.GetKind().(type) {
+	case *kublingv1.Value_StringValue:
+		return kublingv1.ValueType_VALUE_TYPE_STRING, nil
+	case *kublingv1.Value_BooleanValue:
+		return kublingv1.ValueType_VALUE_TYPE_BOOLEAN, nil
+	case *kublingv1.Value_ByteValue:
+		return kublingv1.ValueType_VALUE_TYPE_BYTE, nil
+	case *kublingv1.Value_ShortValue:
+		return kublingv1.ValueType_VALUE_TYPE_SHORT, nil
+	case *kublingv1.Value_IntegerValue:
+		return kublingv1.ValueType_VALUE_TYPE_INTEGER, nil
+	case *kublingv1.Value_LongValue:
+		return kublingv1.ValueType_VALUE_TYPE_LONG, nil
+	case *kublingv1.Value_BigintegerValue:
+		return kublingv1.ValueType_VALUE_TYPE_BIGINTEGER, nil
+	case *kublingv1.Value_FloatValue:
+		return kublingv1.ValueType_VALUE_TYPE_FLOAT, nil
+	case *kublingv1.Value_DoubleValue:
+		return kublingv1.ValueType_VALUE_TYPE_DOUBLE, nil
+	case *kublingv1.Value_BigdecimalValue:
+		return kublingv1.ValueType_VALUE_TYPE_BIGDECIMAL, nil
+	case *kublingv1.Value_DateValue:
+		return kublingv1.ValueType_VALUE_TYPE_DATE, nil
+	case *kublingv1.Value_TimeValue:
+		return kublingv1.ValueType_VALUE_TYPE_TIME, nil
+	case *kublingv1.Value_TimestampValue:
+		return kublingv1.ValueType_VALUE_TYPE_TIMESTAMP, nil
+	case *kublingv1.Value_BlobValue:
+		return kublingv1.ValueType_VALUE_TYPE_BLOB, nil
+	case *kublingv1.Value_JsonValue:
+		return kublingv1.ValueType_VALUE_TYPE_JSON, nil
+	default:
+		return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
+			fmt.Errorf("unsupported aggregate result %T", value.GetKind())
 	}
 }
 

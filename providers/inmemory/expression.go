@@ -12,6 +12,31 @@ func evaluateExpression(
 	row entityRow,
 	expression *providerv1.Expression,
 ) (*kublingv1.Value, error) {
+	return evaluateExpressionInContext(expressionContext{row: &row}, expression)
+}
+
+type expressionContext struct {
+	row     *entityRow
+	rows    []entityRow
+	grouped bool
+}
+
+func evaluateGroupedExpression(
+	rows []entityRow,
+	expression *providerv1.Expression,
+) (*kublingv1.Value, error) {
+	context := expressionContext{rows: rows, grouped: true}
+	if len(rows) > 0 {
+		context.row = &rows[0]
+	}
+
+	return evaluateExpressionInContext(context, expression)
+}
+
+func evaluateExpressionInContext(
+	context expressionContext,
+	expression *providerv1.Expression,
+) (*kublingv1.Value, error) {
 	if expression == nil {
 		return nil, fmt.Errorf("expression is required")
 	}
@@ -21,8 +46,14 @@ func evaluateExpression(
 		if kind.Field == nil || kind.Field.GetName() == "" {
 			return nil, fmt.Errorf("field name is required")
 		}
+		if context.row == nil {
+			return nil, fmt.Errorf(
+				"field %q is unavailable for an empty aggregate group",
+				kind.Field.GetName(),
+			)
+		}
 
-		return rowValue(row, kind.Field.GetName())
+		return rowValue(*context.row, kind.Field.GetName())
 	case *providerv1.Expression_Literal:
 		if kind.Literal == nil || kind.Literal.GetValue() == nil {
 			return nil, fmt.Errorf("literal value is required")
@@ -30,11 +61,11 @@ func evaluateExpression(
 
 		return proto.Clone(kind.Literal.GetValue()).(*kublingv1.Value), nil
 	case *providerv1.Expression_Comparison:
-		return evaluateComparison(row, kind.Comparison)
+		return evaluateComparison(context, kind.Comparison)
 	case *providerv1.Expression_Logical:
-		return evaluateLogical(row, kind.Logical)
+		return evaluateLogical(context, kind.Logical)
 	case *providerv1.Expression_NullPredicate:
-		return evaluateNullPredicate(row, kind.NullPredicate)
+		return evaluateNullPredicate(context, kind.NullPredicate)
 	case *providerv1.Expression_FunctionCall:
 		if kind.FunctionCall == nil {
 			return nil, fmt.Errorf("function call is required")
@@ -44,6 +75,11 @@ func evaluateExpression(
 			"function %q is not supported",
 			kind.FunctionCall.GetName(),
 		)
+	case *providerv1.Expression_Aggregate:
+		if !context.grouped {
+			return nil, fmt.Errorf("aggregate is not valid in a row expression")
+		}
+		return evaluateAggregate(context.rows, kind.Aggregate)
 	default:
 		return nil, fmt.Errorf("expression kind is required")
 	}
@@ -75,19 +111,19 @@ func evaluateFilter(
 }
 
 func evaluateComparison(
-	row entityRow,
+	context expressionContext,
 	comparison *providerv1.ComparisonExpression,
 ) (*kublingv1.Value, error) {
 	if comparison == nil {
 		return nil, fmt.Errorf("comparison is required")
 	}
 
-	left, err := evaluateExpression(row, comparison.GetLeft())
+	left, err := evaluateExpressionInContext(context, comparison.GetLeft())
 	if err != nil {
 		return nil, fmt.Errorf("evaluate comparison left operand: %w", err)
 	}
 
-	right, err := evaluateExpression(row, comparison.GetRight())
+	right, err := evaluateExpressionInContext(context, comparison.GetRight())
 	if err != nil {
 		return nil, fmt.Errorf("evaluate comparison right operand: %w", err)
 	}
@@ -124,7 +160,7 @@ func evaluateComparison(
 }
 
 func evaluateLogical(
-	row entityRow,
+	context expressionContext,
 	logical *providerv1.LogicalExpression,
 ) (*kublingv1.Value, error) {
 	if logical == nil {
@@ -140,7 +176,7 @@ func evaluateLogical(
 		}
 
 		for _, operand := range operands {
-			value, err := evaluateFilter(row, operand)
+			value, err := evaluateBooleanExpression(context, operand)
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +192,7 @@ func evaluateLogical(
 		}
 
 		for _, operand := range operands {
-			value, err := evaluateFilter(row, operand)
+			value, err := evaluateBooleanExpression(context, operand)
 			if err != nil {
 				return nil, err
 			}
@@ -171,7 +207,7 @@ func evaluateLogical(
 			return nil, fmt.Errorf("NOT requires exactly one operand")
 		}
 
-		value, err := evaluateFilter(row, operands[0])
+		value, err := evaluateBooleanExpression(context, operands[0])
 		if err != nil {
 			return nil, err
 		}
@@ -183,14 +219,14 @@ func evaluateLogical(
 }
 
 func evaluateNullPredicate(
-	row entityRow,
+	context expressionContext,
 	predicate *providerv1.NullPredicate,
 ) (*kublingv1.Value, error) {
 	if predicate == nil {
 		return nil, fmt.Errorf("null predicate is required")
 	}
 
-	value, err := evaluateExpression(row, predicate.GetExpression())
+	value, err := evaluateExpressionInContext(context, predicate.GetExpression())
 	if err != nil {
 		return nil, err
 	}
@@ -205,6 +241,25 @@ func evaluateNullPredicate(
 	default:
 		return nil, fmt.Errorf("null predicate operator is required")
 	}
+}
+
+func evaluateBooleanExpression(
+	context expressionContext,
+	expression *providerv1.Expression,
+) (bool, error) {
+	value, err := evaluateExpressionInContext(context, expression)
+	if err != nil {
+		return false, err
+	}
+	if isNullValue(value) {
+		return false, nil
+	}
+	booleanKind, ok := value.GetKind().(*kublingv1.Value_BooleanValue)
+	if !ok {
+		return false, fmt.Errorf("predicate expression must return boolean")
+	}
+
+	return booleanKind.BooleanValue, nil
 }
 
 func expressionValueType(
@@ -251,6 +306,12 @@ func expressionValueType(
 	case *providerv1.Expression_FunctionCall:
 		return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
 			fmt.Errorf("function projections are not supported")
+	case *providerv1.Expression_Aggregate:
+		if kind.Aggregate == nil || kind.Aggregate.GetResultType() == nil {
+			return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
+				fmt.Errorf("aggregate result type is required")
+		}
+		return kind.Aggregate.GetResultType().GetType(), nil
 	default:
 		return kublingv1.ValueType_VALUE_TYPE_UNKNOWN,
 			fmt.Errorf("projection expression kind is required")
@@ -325,20 +386,19 @@ func compareValues(
 	left *kublingv1.Value,
 	right *kublingv1.Value,
 ) (int, error) {
-	if leftNumber, ok := numericValue(left); ok {
-		rightNumber, rightOK := numericValue(right)
-		if !rightOK {
+	if isNumericValue(left) {
+		if !isNumericValue(right) {
 			return 0, fmt.Errorf("cannot compare numeric and non-numeric values")
 		}
-
-		switch {
-		case leftNumber < rightNumber:
-			return -1, nil
-		case leftNumber > rightNumber:
-			return 1, nil
-		default:
-			return 0, nil
+		leftNumber, err := aggregateNumber(left)
+		if err != nil {
+			return 0, err
 		}
+		rightNumber, err := aggregateNumber(right)
+		if err != nil {
+			return 0, err
+		}
+		return leftNumber.Cmp(rightNumber), nil
 	}
 
 	switch leftKind := left.GetKind().(type) {
@@ -370,22 +430,19 @@ func compareValues(
 	}
 }
 
-func numericValue(value *kublingv1.Value) (float64, bool) {
-	switch kind := value.GetKind().(type) {
-	case *kublingv1.Value_ByteValue:
-		return float64(kind.ByteValue), true
-	case *kublingv1.Value_ShortValue:
-		return float64(kind.ShortValue), true
-	case *kublingv1.Value_IntegerValue:
-		return float64(kind.IntegerValue), true
-	case *kublingv1.Value_LongValue:
-		return float64(kind.LongValue), true
-	case *kublingv1.Value_FloatValue:
-		return float64(kind.FloatValue), true
-	case *kublingv1.Value_DoubleValue:
-		return kind.DoubleValue, true
+func isNumericValue(value *kublingv1.Value) bool {
+	switch value.GetKind().(type) {
+	case *kublingv1.Value_ByteValue,
+		*kublingv1.Value_ShortValue,
+		*kublingv1.Value_IntegerValue,
+		*kublingv1.Value_LongValue,
+		*kublingv1.Value_BigintegerValue,
+		*kublingv1.Value_FloatValue,
+		*kublingv1.Value_DoubleValue,
+		*kublingv1.Value_BigdecimalValue:
+		return true
 	default:
-		return 0, false
+		return false
 	}
 }
 

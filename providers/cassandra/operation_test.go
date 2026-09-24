@@ -233,6 +233,110 @@ func TestQueryTranslatesAndStreamsRows(t *testing.T) {
 	}
 }
 
+func TestQueryTranslatesConfiguredAggregatePushdown(t *testing.T) {
+	iterator := &recordingIterator{rows: []map[string]any{{
+		"kubling_aggregate_0": int64(3),
+		"kubling_aggregate_1": int32(3),
+	}}}
+	session, connection := operationConnection(t, iterator)
+	connection.provider.config.Pushdown.Aggregates = true
+
+	stream, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity: taskReference(),
+		Projections: []*providerv1.Projection{
+			aggregateProjection(
+				"task_count",
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				nil,
+				kublingv1.ValueType_VALUE_TYPE_INTEGER,
+			),
+			aggregateProjection(
+				"maximum_priority",
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+				fieldExpression("priority"),
+				kublingv1.ValueType_VALUE_TYPE_INTEGER,
+			),
+		},
+		Filter: equalExpression("project_id", stringValue("project-1")),
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+
+	wantStatement := `SELECT count(*) AS "kubling_aggregate_0", max("priority") AS "kubling_aggregate_1" FROM "kubling_sample"."TASK" WHERE "project_id" = ?`
+	if got := session.queries[0].statement; got != wantStatement {
+		t.Fatalf("Query() statement = %q, want %q", got, wantStatement)
+	}
+	batch, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() error = %v", err)
+	}
+	if len(batch.GetFields()) != 2 ||
+		batch.GetFields()[0].GetType() != kublingv1.ValueType_VALUE_TYPE_INTEGER ||
+		batch.GetFields()[0].GetTypeDescriptor().GetType() != kublingv1.ValueType_VALUE_TYPE_INTEGER {
+		t.Fatalf("Next() fields = %v", batch.GetFields())
+	}
+	values := batch.GetTuples()[0].GetValues()
+	if values[0].GetIntegerValue() != 3 || values[1].GetIntegerValue() != 3 {
+		t.Fatalf("Next() aggregate values = %v", values)
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+}
+
+func TestQueryAggregatePushdownFailsClosed(t *testing.T) {
+	tests := map[string]struct {
+		enabled bool
+		request *providerv1.QueryRequest
+	}{
+		"disabled": {
+			request: &providerv1.QueryRequest{
+				Entity: taskReference(),
+				Projections: []*providerv1.Projection{aggregateProjection(
+					"task_count",
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+					nil,
+					kublingv1.ValueType_VALUE_TYPE_LONG,
+				)},
+			},
+		},
+		"unsupported sum": {
+			enabled: true,
+			request: &providerv1.QueryRequest{
+				Entity: taskReference(),
+				Projections: []*providerv1.Projection{aggregateProjection(
+					"priority_sum",
+					providerv1.AggregateFunction_AGGREGATE_FUNCTION_SUM,
+					fieldExpression("priority"),
+					kublingv1.ValueType_VALUE_TYPE_LONG,
+				)},
+			},
+		},
+		"group by": {
+			enabled: true,
+			request: &providerv1.QueryRequest{
+				Entity:  taskReference(),
+				GroupBy: []*providerv1.Expression{fieldExpression("project_id")},
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			session, connection := operationConnection(t)
+			connection.provider.config.Pushdown.Aggregates = test.enabled
+			_, err := connection.Query(context.Background(), test.request)
+			if status.Code(err) != codes.InvalidArgument {
+				t.Fatalf("Query() code = %v, want %v", status.Code(err), codes.InvalidArgument)
+			}
+			if len(session.queries) != 0 {
+				t.Fatalf("Query() driver calls = %d, want 0", len(session.queries))
+			}
+		})
+	}
+}
+
 func TestResultStreamPreservesCassandraNullsAndZeroValues(t *testing.T) {
 	collectionType := gocql.NewNativeType(4, gocql.TypeCustom, "map<text,text>")
 	types := map[string]gocql.TypeInfo{
@@ -518,4 +622,25 @@ func integerProviderValue(value int32) *kublingv1.Value {
 
 func booleanValue(value bool) *kublingv1.Value {
 	return &kublingv1.Value{Kind: &kublingv1.Value_BooleanValue{BooleanValue: value}}
+}
+
+func aggregateProjection(
+	outputName string,
+	function providerv1.AggregateFunction,
+	argument *providerv1.Expression,
+	resultType kublingv1.ValueType,
+) *providerv1.Projection {
+	aggregate := &providerv1.AggregateCall{
+		Function:   function,
+		ResultType: &kublingv1.TypeDescriptor{Type: resultType},
+	}
+	if argument != nil {
+		aggregate.Arguments = []*providerv1.Expression{argument}
+	}
+	return &providerv1.Projection{
+		Expression: &providerv1.Expression{
+			Kind: &providerv1.Expression_Aggregate{Aggregate: aggregate},
+		},
+		OutputName: outputName,
+	}
 }

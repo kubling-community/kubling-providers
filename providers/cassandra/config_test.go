@@ -30,6 +30,8 @@ func TestLoadConfig(t *testing.T) {
 	path := writeTestConfig(t, `
 namespaceColumn:
   enabled: true
+pushdown:
+  aggregates: true
 namespaces:
   analytics:
     hosts:
@@ -55,6 +57,9 @@ namespaces:
 	}
 	if !config.NamespaceColumn.Enabled || config.NamespaceColumn.Name != "kubling_namespace" {
 		t.Fatalf("LoadConfig() namespace column = %#v", config.NamespaceColumn)
+	}
+	if !config.Pushdown.Aggregates {
+		t.Fatal("LoadConfig() aggregate pushdown = false, want true")
 	}
 
 	dataSource := config.DataSources["analytics"]

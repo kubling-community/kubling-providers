@@ -3,20 +3,34 @@ package cassandra
 import (
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 
 	"github.com/apache/cassandra-gocql-driver/v2"
+	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
+	"google.golang.org/protobuf/proto"
 )
 
 type projectionPlan struct {
-	column     *gocql.ColumnMetadata
-	outputName string
+	column      *gocql.ColumnMetadata
+	outputName  string
+	selector    string
+	resultType  *kublingv1.TypeDescriptor
+	isAggregate bool
 }
 
 func planQueryProjections(
 	table *gocql.TableMetadata,
 	projections []*providerv1.Projection,
+) ([]projectionPlan, error) {
+	return planQueryProjectionsWithAggregates(table, projections, false)
+}
+
+func planQueryProjectionsWithAggregates(
+	table *gocql.TableMetadata,
+	projections []*providerv1.Projection,
+	aggregatesEnabled bool,
 ) ([]projectionPlan, error) {
 	if len(projections) == 0 {
 		planned := make([]projectionPlan, 0, len(table.Columns))
@@ -33,9 +47,27 @@ func planQueryProjections(
 	}
 
 	planned := make([]projectionPlan, 0, len(projections))
+	hasAggregate := false
+	hasColumn := false
 	for _, projection := range projections {
 		if projection == nil || projection.GetExpression() == nil {
 			return nil, fmt.Errorf("projection expression is required")
+		}
+		if aggregate := projection.GetExpression().GetAggregate(); aggregate != nil {
+			if !aggregatesEnabled {
+				return nil, fmt.Errorf("Cassandra aggregate pushdown is disabled")
+			}
+			plannedAggregate, err := planAggregateProjection(
+				table,
+				projection,
+				len(planned),
+			)
+			if err != nil {
+				return nil, err
+			}
+			planned = append(planned, plannedAggregate)
+			hasAggregate = true
+			continue
 		}
 		field := projection.GetExpression().GetField()
 		if field == nil || strings.TrimSpace(field.GetName()) == "" {
@@ -54,17 +86,165 @@ func planQueryProjections(
 			column:     column,
 			outputName: outputName,
 		})
+		hasColumn = true
+	}
+	if hasAggregate && hasColumn {
+		return nil, fmt.Errorf("Cassandra aggregate queries cannot mix aggregate and column projections")
 	}
 
 	return planned, nil
 }
 
+func planAggregateProjection(
+	table *gocql.TableMetadata,
+	projection *providerv1.Projection,
+	index int,
+) (projectionPlan, error) {
+	aggregate := projection.GetExpression().GetAggregate()
+	if aggregate.GetDistinct() {
+		return projectionPlan{}, fmt.Errorf("Cassandra aggregate pushdown does not support DISTINCT")
+	}
+	resultType := aggregate.GetResultType()
+	if resultType == nil || resultType.GetType() == kublingv1.ValueType_VALUE_TYPE_UNKNOWN {
+		return projectionPlan{}, fmt.Errorf("aggregate result type is required")
+	}
+	outputName := strings.TrimSpace(projection.GetOutputName())
+	if outputName == "" {
+		return projectionPlan{}, fmt.Errorf("aggregate projection output_name is required")
+	}
+
+	alias := fmt.Sprintf("kubling_aggregate_%d", index)
+	functionName := ""
+	var resultColumn *gocql.ColumnMetadata
+	switch aggregate.GetFunction() {
+	case providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR:
+		if len(aggregate.GetArguments()) != 0 {
+			return projectionPlan{}, fmt.Errorf("COUNT_STAR accepts no arguments")
+		}
+		if !integerAggregateResult(resultType.GetType()) {
+			return projectionPlan{}, fmt.Errorf("COUNT_STAR requires an integer result type")
+		}
+		functionName = "count(*)"
+		resultColumn = &gocql.ColumnMetadata{
+			Name: alias,
+			Type: gocql.NewNativeType(4, gocql.TypeBigInt, ""),
+		}
+	case providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG:
+		column, err := aggregateColumn(table, aggregate)
+		if err != nil {
+			return projectionPlan{}, err
+		}
+		if !integerAggregateResult(resultType.GetType()) {
+			return projectionPlan{}, fmt.Errorf("%s requires an integer result type", aggregate.GetFunction())
+		}
+		functionName = "count(" + quoteIdentifier(column.Name) + ")"
+		resultColumn = &gocql.ColumnMetadata{
+			Name: alias,
+			Type: gocql.NewNativeType(4, gocql.TypeBigInt, ""),
+		}
+	case providerv1.AggregateFunction_AGGREGATE_FUNCTION_MIN,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX:
+		column, err := aggregateColumn(table, aggregate)
+		if err != nil {
+			return projectionPlan{}, err
+		}
+		if resultType.GetType() != logicalValueType(column.Type) {
+			return projectionPlan{}, fmt.Errorf(
+				"%s result type %s does not match column %q type %s",
+				aggregate.GetFunction(),
+				resultType.GetType(),
+				column.Name,
+				logicalValueType(column.Type),
+			)
+		}
+		functionName = strings.ToLower(strings.TrimPrefix(
+			aggregate.GetFunction().String(),
+			"AGGREGATE_FUNCTION_",
+		)) + "(" + quoteIdentifier(column.Name) + ")"
+		resultColumn = &gocql.ColumnMetadata{Name: alias, Type: column.Type}
+	default:
+		return projectionPlan{}, fmt.Errorf(
+			"aggregate %s is not supported by Cassandra pushdown",
+			aggregate.GetFunction(),
+		)
+	}
+
+	return projectionPlan{
+		column:      resultColumn,
+		outputName:  outputName,
+		selector:    functionName + " AS " + quoteIdentifier(alias),
+		resultType:  proto.Clone(resultType).(*kublingv1.TypeDescriptor),
+		isAggregate: true,
+	}, nil
+}
+
+func aggregateColumn(
+	table *gocql.TableMetadata,
+	aggregate *providerv1.AggregateCall,
+) (*gocql.ColumnMetadata, error) {
+	if len(aggregate.GetArguments()) != 1 {
+		return nil, fmt.Errorf("%s requires exactly one argument", aggregate.GetFunction())
+	}
+	field := aggregate.GetArguments()[0].GetField()
+	if field == nil || strings.TrimSpace(field.GetName()) == "" {
+		return nil, fmt.Errorf("%s supports only a field argument", aggregate.GetFunction())
+	}
+	column := findColumn(table, field.GetName())
+	if column == nil {
+		return nil, fmt.Errorf("column %q was not found", field.GetName())
+	}
+	return column, nil
+}
+
+func integerAggregateResult(valueType kublingv1.ValueType) bool {
+	return valueType == kublingv1.ValueType_VALUE_TYPE_INTEGER ||
+		valueType == kublingv1.ValueType_VALUE_TYPE_LONG ||
+		valueType == kublingv1.ValueType_VALUE_TYPE_BIGINTEGER
+}
+
 func selectColumns(projections []projectionPlan) string {
 	columns := make([]string, 0, len(projections))
 	for _, projection := range projections {
-		columns = append(columns, quoteIdentifier(projection.column.Name))
+		if projection.selector != "" {
+			columns = append(columns, projection.selector)
+		} else {
+			columns = append(columns, quoteIdentifier(projection.column.Name))
+		}
 	}
 	return strings.Join(columns, ", ")
+}
+
+func bindResultColumns(
+	projections []projectionPlan,
+	columns []gocql.ColumnInfo,
+) error {
+	if len(columns) == 0 {
+		return nil
+	}
+	if len(columns) != len(projections) {
+		return fmt.Errorf(
+			"Cassandra returned %d columns for %d projections",
+			len(columns),
+			len(projections),
+		)
+	}
+	for index, column := range columns {
+		if column.TypeInfo == nil {
+			return fmt.Errorf("Cassandra result column %d has no type metadata", index)
+		}
+		bound := *projections[index].column
+		bound.Name = column.Name
+		bound.Type = column.TypeInfo
+		projections[index].column = &bound
+	}
+	return nil
+}
+
+func containsAggregateProjection(projections []projectionPlan) bool {
+	return slices.ContainsFunc(projections, func(projection projectionPlan) bool {
+		return projection.isAggregate
+	})
 }
 
 func buildFilter(

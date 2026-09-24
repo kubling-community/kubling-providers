@@ -113,6 +113,9 @@ message QueryCapabilities {
 
   // Expression operators that the provider can evaluate exactly.
   ExpressionCapabilities expressions = 5;
+
+  // Set-oriented operations that the provider can evaluate exactly.
+  AggregateCapabilities aggregates = 6;
 }
 
 // Expression operators supported by a provider.
@@ -131,6 +134,25 @@ message ExpressionCapabilities {
 
   // Pattern operators that can be evaluated exactly.
   repeated PatternOperator pattern_operators = 4;
+}
+
+// Aggregate operations supported by a provider.
+//
+// These are physical provider capabilities. Kubling may retain an otherwise
+// supported operation in the engine when local execution state, such as an
+// MVCC overlay, must participate in the result.
+message AggregateCapabilities {
+  // Logical aggregate functions that the provider can evaluate exactly.
+  repeated AggregateFunction functions = 1;
+
+  // True when the provider supports DISTINCT aggregate arguments.
+  bool distinct = 2;
+
+  // True when the provider can group by requested expressions exactly.
+  bool group_by = 3;
+
+  // True when the provider can evaluate a HAVING expression after grouping.
+  bool having = 4;
 }
 
 // Ordering capabilities.

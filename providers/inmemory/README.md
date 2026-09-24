@@ -26,6 +26,12 @@ go run ./cmd/inmemory --listen :50051
 The server enables gRPC reflection for local inspection with tools such as
 `grpcurl`.
 
+Pass `--log-queries` to emit safe structural summaries when a query reaches
+the gRPC boundary and when the provider executes it. A received event without
+a matching executed event can indicate a cache hit. Logs include aggregate
+function names and grouping shape, but never values, predicates, namespaces or
+connection identifiers.
+
 ## Schema
 
 The DDL returned by `GetSchema` is maintained in [`schema.sql`](schema.sql).
@@ -48,6 +54,8 @@ unspecified type rather than a column type.
 
 - Queries with projections, filters, ordering, limit, offset, and streamed
   batches.
+- Aggregate queries with grouping, `HAVING`, `DISTINCT`, and the standard
+  count, minimum, maximum, sum, and average functions.
 - `INSERT`, `UPDATE`, and `DELETE`, including generated insert values.
 - Connection-agnostic provider health checks.
 - No native local transactions.

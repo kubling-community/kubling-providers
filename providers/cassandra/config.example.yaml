@@ -2,6 +2,9 @@ namespaceColumn:
   enabled: true
   name: kubling_namespace
 
+pushdown:
+  aggregates: false
+
 namespaces:
   inventory:
     hosts:

@@ -51,6 +51,13 @@ func TestProviderServiceLifecycleAndOperations(t *testing.T) {
 	if got := len(capabilities.GetQuery().GetExpressions().GetNullPredicateOperators()); got != 2 {
 		t.Fatalf("GetCapabilities() null predicate operators = %d, want 2", got)
 	}
+	aggregates := capabilities.GetQuery().GetAggregates()
+	if len(aggregates.GetFunctions()) != 7 ||
+		!aggregates.GetDistinct() ||
+		!aggregates.GetGroupBy() ||
+		!aggregates.GetHaving() {
+		t.Fatalf("GetCapabilities() aggregates = %v", aggregates)
+	}
 	if !capabilities.GetMutations().GetInsert() ||
 		!capabilities.GetMutations().GetUpdate() ||
 		!capabilities.GetMutations().GetDelete() ||

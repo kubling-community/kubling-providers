@@ -412,6 +412,38 @@ func validateExpressionValues(expression *providerv1.Expression) error {
 		if err := validateExpressionValues(typed.Pattern.GetPattern()); err != nil {
 			return fmt.Errorf("pattern expression: %w", err)
 		}
+	case *providerv1.Expression_Aggregate:
+		if typed.Aggregate == nil {
+			return fmt.Errorf("aggregate is nil")
+		}
+		function := typed.Aggregate.GetFunction()
+		if function == providerv1.AggregateFunction_AGGREGATE_FUNCTION_UNSPECIFIED {
+			return fmt.Errorf("aggregate function is AGGREGATE_FUNCTION_UNSPECIFIED")
+		}
+		if _, known := providerv1.AggregateFunction_name[int32(function)]; !known {
+			return fmt.Errorf("aggregate function %d is unknown", function)
+		}
+
+		arguments := typed.Aggregate.GetArguments()
+		if function == providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR {
+			if len(arguments) != 0 {
+				return fmt.Errorf("COUNT_STAR must not contain arguments")
+			}
+			if typed.Aggregate.GetDistinct() {
+				return fmt.Errorf("COUNT_STAR must not be DISTINCT")
+			}
+		} else if len(arguments) != 1 {
+			return fmt.Errorf("%s requires exactly one argument", function)
+		}
+
+		for argumentIndex, argument := range arguments {
+			if err := validateExpressionValues(argument); err != nil {
+				return fmt.Errorf("aggregate argument %d: %w", argumentIndex, err)
+			}
+		}
+		if err := validateTypeDescriptor(typed.Aggregate.GetResultType()); err != nil {
+			return fmt.Errorf("aggregate result_type: %w", err)
+		}
 	}
 
 	return nil
@@ -436,6 +468,14 @@ func validateQueryRequestValues(request *providerv1.QueryRequest) error {
 		if err := validateExpressionValues(order.GetExpression()); err != nil {
 			return fmt.Errorf("order_by %d: %w", orderIndex, err)
 		}
+	}
+	for groupIndex, group := range request.GetGroupBy() {
+		if err := validateExpressionValues(group); err != nil {
+			return fmt.Errorf("group_by %d: %w", groupIndex, err)
+		}
+	}
+	if err := validateExpressionValues(request.GetHaving()); err != nil {
+		return fmt.Errorf("having: %w", err)
 	}
 
 	return nil

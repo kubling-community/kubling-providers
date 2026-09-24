@@ -2,6 +2,7 @@ package inmemory
 
 import (
 	"context"
+	"log/slog"
 	"sync"
 
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
@@ -11,9 +12,10 @@ import (
 
 // Connection is a logical connection to one in-memory task store.
 type Connection struct {
-	mu     sync.RWMutex
-	store  *store
-	closed bool
+	mu          sync.RWMutex
+	store       *store
+	closed      bool
+	queryLogger *slog.Logger
 
 	lobMu sync.Mutex
 	lobs  map[string]inMemoryLob

@@ -275,6 +275,114 @@ func TestValidateInputBatchStructurePreservesLegacyFieldTyping(t *testing.T) {
 	}
 }
 
+func TestValidateQueryRequestValuesAcceptsAggregateExpressions(t *testing.T) {
+	request := newQueryTestRequest("connection")
+	request.Projections = []*providerv1.Projection{{
+		OutputName: "average_amount",
+		Expression: &providerv1.Expression{Kind: &providerv1.Expression_Aggregate{
+			Aggregate: &providerv1.AggregateCall{
+				Function: providerv1.AggregateFunction_AGGREGATE_FUNCTION_AVG,
+				Arguments: []*providerv1.Expression{{Kind: &providerv1.Expression_Field{
+					Field: &providerv1.FieldReference{Name: "amount"},
+				}}},
+				ResultType: &kublingv1.TypeDescriptor{
+					Type: kublingv1.ValueType_VALUE_TYPE_DOUBLE,
+				},
+			},
+		}},
+	}}
+	request.GroupBy = []*providerv1.Expression{{Kind: &providerv1.Expression_Field{
+		Field: &providerv1.FieldReference{Name: "category"},
+	}}}
+	request.Having = &providerv1.Expression{Kind: &providerv1.Expression_Literal{
+		Literal: &providerv1.Literal{Value: &kublingv1.Value{
+			Kind: &kublingv1.Value_BooleanValue{BooleanValue: true},
+		}},
+	}}
+
+	if err := validateQueryRequestValues(request); err != nil {
+		t.Fatalf("validateQueryRequestValues() error = %v", err)
+	}
+}
+
+func TestValidateExpressionValuesRejectsInvalidAggregates(t *testing.T) {
+	stringResult := &kublingv1.TypeDescriptor{
+		Type: kublingv1.ValueType_VALUE_TYPE_STRING,
+	}
+	fieldArgument := []*providerv1.Expression{{Kind: &providerv1.Expression_Field{
+		Field: &providerv1.FieldReference{Name: "value"},
+	}}}
+	tests := []struct {
+		name      string
+		aggregate *providerv1.AggregateCall
+		wantText  string
+	}{
+		{
+			name:      "unspecified function",
+			aggregate: &providerv1.AggregateCall{ResultType: stringResult},
+			wantText:  "AGGREGATE_FUNCTION_UNSPECIFIED",
+		},
+		{
+			name: "unknown function",
+			aggregate: &providerv1.AggregateCall{
+				Function:   99,
+				ResultType: stringResult,
+			},
+			wantText: "function 99 is unknown",
+		},
+		{
+			name: "count star argument",
+			aggregate: &providerv1.AggregateCall{
+				Function:   providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				Arguments:  fieldArgument,
+				ResultType: stringResult,
+			},
+			wantText: "COUNT_STAR must not contain arguments",
+		},
+		{
+			name: "count star distinct",
+			aggregate: &providerv1.AggregateCall{
+				Function:   providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				Distinct:   true,
+				ResultType: stringResult,
+			},
+			wantText: "COUNT_STAR must not be DISTINCT",
+		},
+		{
+			name: "missing argument",
+			aggregate: &providerv1.AggregateCall{
+				Function:   providerv1.AggregateFunction_AGGREGATE_FUNCTION_SUM,
+				ResultType: stringResult,
+			},
+			wantText: "requires exactly one argument",
+		},
+		{
+			name: "missing result type",
+			aggregate: &providerv1.AggregateCall{
+				Function:  providerv1.AggregateFunction_AGGREGATE_FUNCTION_SUM,
+				Arguments: fieldArgument,
+			},
+			wantText: "result_type: type descriptor is required",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			expression := &providerv1.Expression{Kind: &providerv1.Expression_Aggregate{
+				Aggregate: test.aggregate,
+			}}
+			err := validateExpressionValues(expression)
+			if err == nil || !strings.Contains(err.Error(), test.wantText) {
+				t.Fatalf(
+					"validateExpressionValues() error = %v, want text %q",
+					err,
+					test.wantText,
+				)
+			}
+		})
+	}
+}
+
 func TestServerRejectsDeclaredLiteralMismatch(t *testing.T) {
 	connection := &queryTestConnection{queryFunc: func(
 		context.Context,
@@ -295,6 +403,35 @@ func TestServerRejectsDeclaredLiteralMismatch(t *testing.T) {
 				Type: kublingv1.ValueType_VALUE_TYPE_INTEGER,
 			},
 		},
+	}}
+
+	err := server.Query(request, &queryTestServerStream{ctx: context.Background()})
+	if got := status.Code(err); got != codes.InvalidArgument {
+		t.Fatalf("Query status = %s, want %s: %v", got, codes.InvalidArgument, err)
+	}
+}
+
+func TestServerRejectsInvalidAggregateExpression(t *testing.T) {
+	connection := &queryTestConnection{queryFunc: func(
+		context.Context,
+		*providerv1.QueryRequest,
+	) (ResultStream, error) {
+		t.Fatal("Query reached provider with an invalid aggregate")
+		return nil, nil
+	}}
+	server := NewServer(&serverTestProvider{})
+	connectionID := addServerTestConnection(t, server, connection)
+	request := newQueryTestRequest(connectionID)
+	request.Projections = []*providerv1.Projection{{
+		OutputName: "total",
+		Expression: &providerv1.Expression{Kind: &providerv1.Expression_Aggregate{
+			Aggregate: &providerv1.AggregateCall{
+				Function: providerv1.AggregateFunction_AGGREGATE_FUNCTION_SUM,
+				Arguments: []*providerv1.Expression{{Kind: &providerv1.Expression_Field{
+					Field: &providerv1.FieldReference{Name: "amount"},
+				}}},
+			},
+		}},
 	}}
 
 	err := server.Query(request, &queryTestServerStream{ctx: context.Background()})

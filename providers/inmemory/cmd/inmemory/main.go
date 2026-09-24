@@ -11,6 +11,7 @@ import (
 	"syscall"
 
 	inmemory "github.com/kubling-community/kubling-providers/providers/inmemory"
+	"github.com/kubling-community/kubling-providers/providers/inmemory/internal/querylog"
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	providercache "github.com/kubling-community/kubling-providers/sdk-go/provider/cache"
@@ -24,22 +25,32 @@ func main() {
 		":50051",
 		"address on which the provider gRPC server listens",
 	)
+	logQueries := flag.Bool(
+		"log-queries",
+		false,
+		"log safe query summaries without values or connection identifiers",
+	)
 	flag.Parse()
 
-	if err := run(*listenAddress); err != nil {
+	if err := run(*listenAddress, *logQueries); err != nil {
 		slog.Error("in-memory provider stopped", "error", err)
 		os.Exit(1)
 	}
 }
 
-func run(listenAddress string) error {
+func run(listenAddress string, logQueries bool) error {
 	listener, err := net.Listen("tcp", listenAddress)
 	if err != nil {
 		return err
 	}
 	defer listener.Close()
 
-	implementation := inmemory.New()
+	logger := slog.Default()
+	var options []inmemory.Option
+	if logQueries {
+		options = append(options, inmemory.WithQueryLogger(logger))
+	}
+	implementation := inmemory.New(options...)
 	cachedImplementation, _ := providercache.Wrap(
 		implementation,
 		providercache.Config{},
@@ -47,7 +58,14 @@ func run(listenAddress string) error {
 	service := providersdk.NewServer(cachedImplementation)
 	grpcServer := grpc.NewServer()
 
-	providerv1.RegisterProviderServiceServer(grpcServer, service)
+	registeredService := providerv1.ProviderServiceServer(service)
+	if logQueries {
+		registeredService = &queryLoggingServer{
+			Server: service,
+			logger: logger,
+		}
+	}
+	providerv1.RegisterProviderServiceServer(grpcServer, registeredService)
 	reflection.Register(grpcServer)
 
 	ctx, stop := signal.NotifyContext(
@@ -76,4 +94,17 @@ func run(listenAddress string) error {
 	}
 
 	return errors.Join(serveErr, closeErr)
+}
+
+type queryLoggingServer struct {
+	*providersdk.Server
+	logger *slog.Logger
+}
+
+func (s *queryLoggingServer) Query(
+	request *providerv1.QueryRequest,
+	stream providerv1.ProviderService_QueryServer,
+) error {
+	querylog.Received(stream.Context(), s.logger, request)
+	return s.Server.Query(request, stream)
 }

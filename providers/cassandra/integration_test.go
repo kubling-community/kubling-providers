@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -35,6 +36,19 @@ func TestCassandraIntegrationLifecycleAndOperations(t *testing.T) {
 		!capabilities.GetMutations().GetDelete() {
 		t.Fatalf("GetCapabilities() mutations = %v", capabilities.GetMutations())
 	}
+	wantAggregates := []providerv1.AggregateFunction{
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_BIG,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_MIN,
+		providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+	}
+	if aggregates := capabilities.GetQuery().GetAggregates(); !reflect.DeepEqual(aggregates.GetFunctions(), wantAggregates) ||
+		aggregates.GetDistinct() ||
+		aggregates.GetGroupBy() ||
+		aggregates.GetHaving() {
+		t.Fatalf("GetCapabilities() aggregates = %v", aggregates)
+	}
 
 	schema, err := client.GetSchema(ctx, &providerv1.GetSchemaRequest{})
 	if err != nil {
@@ -51,6 +65,34 @@ func TestCassandraIntegrationLifecycleAndOperations(t *testing.T) {
 	connectionID := opened.GetConnectionId()
 	if connectionID == "" {
 		t.Fatal("OpenConnection() connection id is empty")
+	}
+
+	aggregateRows := integrationQuery(t, client, &providerv1.QueryRequest{
+		ConnectionId: connectionID,
+		Entity: &providerv1.EntityReference{
+			Name:      "TASK",
+			Namespace: "sample",
+		},
+		Projections: []*providerv1.Projection{
+			aggregateProjection(
+				"task_count",
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_COUNT_STAR,
+				nil,
+				kublingv1.ValueType_VALUE_TYPE_LONG,
+			),
+			aggregateProjection(
+				"maximum_priority",
+				providerv1.AggregateFunction_AGGREGATE_FUNCTION_MAX,
+				fieldExpression("priority"),
+				kublingv1.ValueType_VALUE_TYPE_INTEGER,
+			),
+		},
+	})
+	if len(aggregateRows) != 1 ||
+		len(aggregateRows[0].GetValues()) != 2 ||
+		aggregateRows[0].GetValues()[0].GetLongValue() != 3 ||
+		aggregateRows[0].GetValues()[1].GetIntegerValue() != 3 {
+		t.Fatalf("Query(TASK aggregates) rows = %v", aggregateRows)
 	}
 
 	typeRows := integrationQuery(t, client, &providerv1.QueryRequest{

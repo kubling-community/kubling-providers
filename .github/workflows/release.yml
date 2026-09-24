@@ -73,7 +73,7 @@ jobs:
         run: |
           buf build --error-format github-actions
           buf lint --error-format github-actions
-          buf breaking --against 'buf.build/kubling/kubling-providers:v0.3.0' --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.4.0' --error-format github-actions
 
   go:
     name: Validate Go SDK and providers
@@ -212,7 +212,7 @@ jobs:
         run: |
           buf build --error-format github-actions
           buf lint --error-format github-actions
-          buf breaking --against 'buf.build/kubling/kubling-providers:v0.3.0' --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.4.0' --error-format github-actions
           buf push \
             --label main \
             --label "v${RELEASE_VERSION}" \

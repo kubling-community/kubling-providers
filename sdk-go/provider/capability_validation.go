@@ -6,6 +6,7 @@ import (
 
 	grpcfeatures "github.com/kubling-community/kubling-grpc/sdk-go/features"
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
+	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 )
 
 type valueTypeDirections struct {
@@ -14,6 +15,12 @@ type valueTypeDirections struct {
 }
 
 func validateProviderCapabilities(capabilities *Capabilities) error {
+	if err := validateAggregateCapabilities(
+		capabilities.GetQuery().GetAggregates(),
+	); err != nil {
+		return err
+	}
+
 	values := capabilities.GetValues()
 	if values == nil {
 		return nil
@@ -140,6 +147,43 @@ func validateProviderCapabilities(capabilities *Capabilities) error {
 				grpcfeatures.LobReadV1,
 			)
 		}
+	}
+
+	return nil
+}
+
+func validateAggregateCapabilities(
+	aggregates *providerv1.AggregateCapabilities,
+) error {
+	if aggregates == nil {
+		return nil
+	}
+
+	functions := make(
+		map[providerv1.AggregateFunction]struct{},
+		len(aggregates.GetFunctions()),
+	)
+	for index, function := range aggregates.GetFunctions() {
+		if function == providerv1.AggregateFunction_AGGREGATE_FUNCTION_UNSPECIFIED {
+			return fmt.Errorf(
+				"query.aggregates.functions[%d] is AGGREGATE_FUNCTION_UNSPECIFIED",
+				index,
+			)
+		}
+		if _, known := providerv1.AggregateFunction_name[int32(function)]; !known {
+			return fmt.Errorf(
+				"query.aggregates.functions[%d] %d is unknown",
+				index,
+				function,
+			)
+		}
+		if _, duplicate := functions[function]; duplicate {
+			return fmt.Errorf(
+				"query.aggregates.functions contains duplicate %s",
+				function,
+			)
+		}
+		functions[function] = struct{}{}
 	}
 
 	return nil
