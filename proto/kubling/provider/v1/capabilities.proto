@@ -116,6 +116,15 @@ message QueryCapabilities {
 
   // Set-oriented operations that the provider can evaluate exactly.
   AggregateCapabilities aggregates = 6;
+
+  // True when this provider can return valid rows together with an explicit
+  // PARTIAL QueryOutcome.
+  //
+  // Kubling still decides per request whether partial results are allowed. A
+  // deployment configured for strict source completeness must advertise false
+  // even when its implementation can technically continue after a target
+  // failure.
+  bool partial_results = 7;
 }
 
 // Expression operators supported by a provider.

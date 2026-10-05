@@ -91,6 +91,7 @@ type recordingStream struct {
 
 	mu        sync.Mutex
 	batches   []*providerv1.TupleBatch
+	outcome   *providerv1.QueryOutcome
 	size      int64
 	cacheable bool
 	complete  bool
@@ -116,6 +117,7 @@ func (s *recordingStream) Next(
 	if err != nil {
 		if err == io.EOF {
 			s.complete = true
+			s.captureOutcome()
 		} else {
 			s.cacheable = false
 		}
@@ -160,6 +162,48 @@ func batchContainsLobReference(batch *providerv1.TupleBatch) bool {
 	return false
 }
 
+func (s *recordingStream) captureOutcome() {
+	outcome := &providerv1.QueryOutcome{
+		Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+	}
+	if outcomeStream, ok := s.stream.(providersdk.QueryOutcomeStream); ok {
+		providerOutcome := outcomeStream.Outcome()
+		if providerOutcome == nil {
+			s.disableCaching()
+			s.outcome = nil
+			return
+		}
+		outcome = proto.Clone(providerOutcome).(*providerv1.QueryOutcome)
+	}
+	s.outcome = outcome
+
+	// Partial, invalid and diagnostic-bearing results are deliberately not
+	// cached. Re-execution preserves source visibility and ensures warnings are
+	// not detached from the conditions that produced them.
+	if outcome.GetCompletion() !=
+		providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE ||
+		len(outcome.GetWarnings()) > 0 {
+		s.disableCaching()
+		return
+	}
+
+	if !s.cacheable {
+		return
+	}
+	outcomeSize := int64(proto.Size(outcome))
+	if s.size+outcomeSize > s.state.maxEntryBytes {
+		s.disableCaching()
+		return
+	}
+	s.size += outcomeSize
+}
+
+func (s *recordingStream) disableCaching() {
+	s.cacheable = false
+	s.batches = nil
+	s.size = 0
+}
+
 func valueContainsLobReference(value *kublingv1.Value) bool {
 	switch typed := value.GetKind().(type) {
 	case *kublingv1.Value_LobReference:
@@ -188,6 +232,7 @@ func (s *recordingStream) Close() error {
 	cacheable := closeErr == nil && s.complete && s.cacheable
 	result := cachedResult{
 		batches: append([]*providerv1.TupleBatch(nil), s.batches...),
+		outcome: cloneQueryOutcome(s.outcome),
 		size:    s.size,
 	}
 	s.mu.Unlock()
@@ -197,6 +242,17 @@ func (s *recordingStream) Close() error {
 	}
 
 	return closeErr
+}
+
+func (s *recordingStream) Outcome() *providerv1.QueryOutcome {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if !s.complete {
+		return nil
+	}
+
+	return cloneQueryOutcome(s.outcome)
 }
 
 type replayStream struct {
@@ -234,8 +290,24 @@ func (s *replayStream) Close() error {
 	return nil
 }
 
+func (s *replayStream) Outcome() *providerv1.QueryOutcome {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return cloneQueryOutcome(s.result.outcome)
+}
+
+func cloneQueryOutcome(outcome *providerv1.QueryOutcome) *providerv1.QueryOutcome {
+	if outcome == nil {
+		return nil
+	}
+	return proto.Clone(outcome).(*providerv1.QueryOutcome)
+}
+
 var (
-	_ providersdk.Connection   = (*cachedConnection)(nil)
-	_ providersdk.ResultStream = (*recordingStream)(nil)
-	_ providersdk.ResultStream = (*replayStream)(nil)
+	_ providersdk.Connection         = (*cachedConnection)(nil)
+	_ providersdk.ResultStream       = (*recordingStream)(nil)
+	_ providersdk.ResultStream       = (*replayStream)(nil)
+	_ providersdk.QueryOutcomeStream = (*recordingStream)(nil)
+	_ providersdk.QueryOutcomeStream = (*replayStream)(nil)
 )

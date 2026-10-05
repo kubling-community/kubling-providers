@@ -136,6 +136,50 @@ class DistributionTest(unittest.TestCase):
             expression_pb2.AGGREGATE_FUNCTION_AVG,
         )
 
+    def test_preserves_query_outcome_contract(self):
+        warning = query_pb2.QueryWarning(
+            code="target_unavailable",
+            message="one target could not be queried",
+            target="bmc-42",
+            retryable=True,
+            role=query_pb2.QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+        )
+        request = query_pb2.QueryRequest(
+            accept_outcome=True,
+            allow_partial_results=True,
+        )
+        response = query_pb2.QueryResponse(
+            outcome=query_pb2.QueryOutcome(
+                completion=query_pb2.QUERY_COMPLETION_PARTIAL,
+                warnings=[warning],
+            )
+        )
+        capabilities = capabilities_pb2.QueryCapabilities(partial_results=True)
+
+        decoded_request = query_pb2.QueryRequest.FromString(
+            request.SerializeToString()
+        )
+        self.assertTrue(decoded_request.accept_outcome)
+        self.assertTrue(decoded_request.allow_partial_results)
+
+        decoded_response = query_pb2.QueryResponse.FromString(
+            response.SerializeToString()
+        )
+        self.assertEqual(
+            decoded_response.outcome.completion,
+            query_pb2.QUERY_COMPLETION_PARTIAL,
+        )
+        self.assertEqual(decoded_response.outcome.warnings[0], warning)
+        self.assertEqual(
+            decoded_response.outcome.warnings[0].role,
+            query_pb2.QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+        )
+        self.assertTrue(
+            capabilities_pb2.QueryCapabilities.FromString(
+                capabilities.SerializeToString()
+            ).partial_results
+        )
+
     def test_constructs_provider_stub_without_connecting(self):
         with grpc.insecure_channel("localhost:1") as channel:
             provider = provider_pb2_grpc.ProviderServiceStub(channel)

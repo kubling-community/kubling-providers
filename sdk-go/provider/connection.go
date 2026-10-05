@@ -57,6 +57,19 @@ type ResultStream interface {
 	Close() error
 }
 
+// QueryOutcomeStream is an optional ResultStream extension for reporting
+// terminal query metadata.
+//
+// Outcome is called only after Next returns io.EOF. It must then return a
+// stable, non-nil outcome. Streams that do not implement this interface are
+// treated as complete and without warnings. Every warning must declare its
+// diagnostic role; partial outcomes require at least one partial-result cause,
+// while complete outcomes must not contain one.
+type QueryOutcomeStream interface {
+	ResultStream
+	Outcome() *providerv1.QueryOutcome
+}
+
 // LobConnection may be implemented by a Connection that exposes immutable,
 // provider-owned LOB references. Kubling consumes these references through the
 // SDK and must replace them with client-facing references from its own LOB

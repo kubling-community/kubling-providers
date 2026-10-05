@@ -136,5 +136,6 @@ type queryCapture struct {
 
 type cachedResult struct {
 	batches []*providerv1.TupleBatch
+	outcome *providerv1.QueryOutcome
 	size    int64
 }

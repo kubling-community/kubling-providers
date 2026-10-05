@@ -121,6 +121,112 @@ func (NullOrdering) EnumDescriptor() ([]byte, []int) {
 	return file_kubling_provider_v1_query_proto_rawDescGZIP(), []int{1}
 }
 
+// Completeness of the rows returned by a provider query.
+type QueryCompletion int32
+
+const (
+	QueryCompletion_QUERY_COMPLETION_UNSPECIFIED QueryCompletion = 0
+	// Every source target required by the provider query was evaluated.
+	QueryCompletion_QUERY_COMPLETION_COMPLETE QueryCompletion = 1
+	// Returned rows are valid, but at least one required source target could not
+	// be evaluated. At least one diagnostic must identify itself as a partial
+	// result cause and explain the incompleteness.
+	QueryCompletion_QUERY_COMPLETION_PARTIAL QueryCompletion = 2
+)
+
+// Enum value maps for QueryCompletion.
+var (
+	QueryCompletion_name = map[int32]string{
+		0: "QUERY_COMPLETION_UNSPECIFIED",
+		1: "QUERY_COMPLETION_COMPLETE",
+		2: "QUERY_COMPLETION_PARTIAL",
+	}
+	QueryCompletion_value = map[string]int32{
+		"QUERY_COMPLETION_UNSPECIFIED": 0,
+		"QUERY_COMPLETION_COMPLETE":    1,
+		"QUERY_COMPLETION_PARTIAL":     2,
+	}
+)
+
+func (x QueryCompletion) Enum() *QueryCompletion {
+	p := new(QueryCompletion)
+	*p = x
+	return p
+}
+
+func (x QueryCompletion) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (QueryCompletion) Descriptor() protoreflect.EnumDescriptor {
+	return file_kubling_provider_v1_query_proto_enumTypes[2].Descriptor()
+}
+
+func (QueryCompletion) Type() protoreflect.EnumType {
+	return &file_kubling_provider_v1_query_proto_enumTypes[2]
+}
+
+func (x QueryCompletion) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use QueryCompletion.Descriptor instead.
+func (QueryCompletion) EnumDescriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_query_proto_rawDescGZIP(), []int{2}
+}
+
+// Relationship between a query diagnostic and the returned result.
+type QueryDiagnosticRole int32
+
+const (
+	QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED QueryDiagnosticRole = 0
+	// The diagnostic does not affect result completeness.
+	QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING QueryDiagnosticRole = 1
+	// The diagnostic explains why the returned result is incomplete.
+	QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE QueryDiagnosticRole = 2
+)
+
+// Enum value maps for QueryDiagnosticRole.
+var (
+	QueryDiagnosticRole_name = map[int32]string{
+		0: "QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED",
+		1: "QUERY_DIAGNOSTIC_ROLE_WARNING",
+		2: "QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE",
+	}
+	QueryDiagnosticRole_value = map[string]int32{
+		"QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED":          0,
+		"QUERY_DIAGNOSTIC_ROLE_WARNING":              1,
+		"QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE": 2,
+	}
+)
+
+func (x QueryDiagnosticRole) Enum() *QueryDiagnosticRole {
+	p := new(QueryDiagnosticRole)
+	*p = x
+	return p
+}
+
+func (x QueryDiagnosticRole) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (QueryDiagnosticRole) Descriptor() protoreflect.EnumDescriptor {
+	return file_kubling_provider_v1_query_proto_enumTypes[3].Descriptor()
+}
+
+func (QueryDiagnosticRole) Type() protoreflect.EnumType {
+	return &file_kubling_provider_v1_query_proto_enumTypes[3]
+}
+
+func (x QueryDiagnosticRole) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use QueryDiagnosticRole.Descriptor instead.
+func (QueryDiagnosticRole) EnumDescriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_query_proto_rawDescGZIP(), []int{3}
+}
+
 // Query executed against a logical provider connection.
 type QueryRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -167,9 +273,22 @@ type QueryRequest struct {
 	// Optional expression applied after grouping and aggregate evaluation.
 	//
 	// Kubling must only set this field when the provider advertises having.
-	Having        *Expression `protobuf:"bytes,11,opt,name=having,proto3" json:"having,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Having *Expression `protobuf:"bytes,11,opt,name=having,proto3" json:"having,omitempty"`
+	// True when Kubling accepts a terminal QueryOutcome response.
+	//
+	// Providers must not emit QueryOutcome when this field is false. When true,
+	// the provider must emit exactly one outcome after all tuple batches and the
+	// RPC must also finish with an OK status for the query to be successful.
+	AcceptOutcome bool `protobuf:"varint,12,opt,name=accept_outcome,json=acceptOutcome,proto3" json:"accept_outcome,omitempty"`
+	// True when Kubling permits valid rows to be returned with an explicitly
+	// incomplete outcome.
+	//
+	// This requires accept_outcome and may only be requested when the provider
+	// advertises partial_results. A provider that cannot complete a strict query
+	// must fail the RPC instead of returning a partial outcome.
+	AllowPartialResults bool `protobuf:"varint,13,opt,name=allow_partial_results,json=allowPartialResults,proto3" json:"allow_partial_results,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *QueryRequest) Reset() {
@@ -277,6 +396,20 @@ func (x *QueryRequest) GetHaving() *Expression {
 		return x.Having
 	}
 	return nil
+}
+
+func (x *QueryRequest) GetAcceptOutcome() bool {
+	if x != nil {
+		return x.AcceptOutcome
+	}
+	return false
+}
+
+func (x *QueryRequest) GetAllowPartialResults() bool {
+	if x != nil {
+		return x.AllowPartialResults
+	}
+	return false
 }
 
 // Logical entity exposed through the Kubling model.
@@ -459,7 +592,16 @@ func (x *OrderBy) GetNullOrdering() NullOrdering {
 type QueryResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Batch of tuples produced by the provider.
-	Batch         *TupleBatch `protobuf:"bytes,1,opt,name=batch,proto3" json:"batch,omitempty"`
+	//
+	// A response must contain either batch or outcome, never both. All batches
+	// must precede the terminal outcome.
+	Batch *TupleBatch `protobuf:"bytes,1,opt,name=batch,proto3" json:"batch,omitempty"`
+	// Terminal query outcome.
+	//
+	// This is emitted exactly once only when QueryRequest.accept_outcome is true.
+	// Receiving this message does not by itself establish success: the gRPC
+	// stream must also finish with an OK status.
+	Outcome       *QueryOutcome `protobuf:"bytes,2,opt,name=outcome,proto3" json:"outcome,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -501,11 +643,163 @@ func (x *QueryResponse) GetBatch() *TupleBatch {
 	return nil
 }
 
+func (x *QueryResponse) GetOutcome() *QueryOutcome {
+	if x != nil {
+		return x.Outcome
+	}
+	return nil
+}
+
+// Terminal metadata for a provider query.
+type QueryOutcome struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Whether the returned rows are complete.
+	Completion QueryCompletion `protobuf:"varint,1,opt,name=completion,proto3,enum=kubling.provider.v1.QueryCompletion" json:"completion,omitempty"`
+	// Non-fatal diagnostics observed while producing the result.
+	//
+	// A COMPLETE outcome may contain warnings, but it must not contain a partial
+	// result cause. A PARTIAL outcome must contain at least one partial result
+	// cause and may also contain unrelated warnings.
+	Warnings      []*QueryWarning `protobuf:"bytes,2,rep,name=warnings,proto3" json:"warnings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryOutcome) Reset() {
+	*x = QueryOutcome{}
+	mi := &file_kubling_provider_v1_query_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryOutcome) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryOutcome) ProtoMessage() {}
+
+func (x *QueryOutcome) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_query_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryOutcome.ProtoReflect.Descriptor instead.
+func (*QueryOutcome) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_query_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *QueryOutcome) GetCompletion() QueryCompletion {
+	if x != nil {
+		return x.Completion
+	}
+	return QueryCompletion_QUERY_COMPLETION_UNSPECIFIED
+}
+
+func (x *QueryOutcome) GetWarnings() []*QueryWarning {
+	if x != nil {
+		return x.Warnings
+	}
+	return nil
+}
+
+// Non-fatal provider query diagnostic.
+type QueryWarning struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Optional stable provider-defined identifier suitable for automation.
+	Code string `protobuf:"bytes,1,opt,name=code,proto3" json:"code,omitempty"`
+	// Human-readable explanation safe to expose to the Kubling client.
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// Optional provider-defined logical identifier for the affected target.
+	//
+	// This must not contain credentials, secret material or an endpoint URI with
+	// embedded credentials.
+	Target string `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	// True when retrying the affected target may succeed without configuration
+	// or query changes.
+	Retryable bool `protobuf:"varint,4,opt,name=retryable,proto3" json:"retryable,omitempty"`
+	// Required relationship between this diagnostic and result completeness.
+	Role          QueryDiagnosticRole `protobuf:"varint,5,opt,name=role,proto3,enum=kubling.provider.v1.QueryDiagnosticRole" json:"role,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *QueryWarning) Reset() {
+	*x = QueryWarning{}
+	mi := &file_kubling_provider_v1_query_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QueryWarning) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QueryWarning) ProtoMessage() {}
+
+func (x *QueryWarning) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_query_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QueryWarning.ProtoReflect.Descriptor instead.
+func (*QueryWarning) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_query_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *QueryWarning) GetCode() string {
+	if x != nil {
+		return x.Code
+	}
+	return ""
+}
+
+func (x *QueryWarning) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *QueryWarning) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *QueryWarning) GetRetryable() bool {
+	if x != nil {
+		return x.Retryable
+	}
+	return false
+}
+
+func (x *QueryWarning) GetRole() QueryDiagnosticRole {
+	if x != nil {
+		return x.Role
+	}
+	return QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED
+}
+
 var File_kubling_provider_v1_query_proto protoreflect.FileDescriptor
 
 const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\n" +
-	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xc8\x04\n" +
+	"\x1fkubling/provider/v1/query.proto\x12\x13kubling.provider.v1\x1a$kubling/provider/v1/expression.proto\x1a\x1fkubling/provider/v1/tuple.proto\"\xa3\x05\n" +
 	"\fQueryRequest\x12#\n" +
 	"\rconnection_id\x18\x01 \x01(\tR\fconnectionId\x12<\n" +
 	"\x06entity\x18\x02 \x01(\v2$.kubling.provider.v1.EntityReferenceR\x06entity\x12A\n" +
@@ -519,7 +813,9 @@ const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\x11accepted_features\x18\t \x03(\tR\x10acceptedFeatures\x12:\n" +
 	"\bgroup_by\x18\n" +
 	" \x03(\v2\x1f.kubling.provider.v1.ExpressionR\agroupBy\x127\n" +
-	"\x06having\x18\v \x01(\v2\x1f.kubling.provider.v1.ExpressionR\x06havingB\b\n" +
+	"\x06having\x18\v \x01(\v2\x1f.kubling.provider.v1.ExpressionR\x06having\x12%\n" +
+	"\x0eaccept_outcome\x18\f \x01(\bR\racceptOutcome\x122\n" +
+	"\x15allow_partial_results\x18\r \x01(\bR\x13allowPartialResultsB\b\n" +
 	"\x06_limitB\t\n" +
 	"\a_offsetB\r\n" +
 	"\v_batch_size\"C\n" +
@@ -538,9 +834,21 @@ const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"expression\x18\x01 \x01(\v2\x1f.kubling.provider.v1.ExpressionR\n" +
 	"expression\x12@\n" +
 	"\tdirection\x18\x02 \x01(\x0e2\".kubling.provider.v1.SortDirectionR\tdirection\x12F\n" +
-	"\rnull_ordering\x18\x03 \x01(\x0e2!.kubling.provider.v1.NullOrderingR\fnullOrdering\"F\n" +
+	"\rnull_ordering\x18\x03 \x01(\x0e2!.kubling.provider.v1.NullOrderingR\fnullOrdering\"\x83\x01\n" +
 	"\rQueryResponse\x125\n" +
-	"\x05batch\x18\x01 \x01(\v2\x1f.kubling.provider.v1.TupleBatchR\x05batch*l\n" +
+	"\x05batch\x18\x01 \x01(\v2\x1f.kubling.provider.v1.TupleBatchR\x05batch\x12;\n" +
+	"\aoutcome\x18\x02 \x01(\v2!.kubling.provider.v1.QueryOutcomeR\aoutcome\"\x93\x01\n" +
+	"\fQueryOutcome\x12D\n" +
+	"\n" +
+	"completion\x18\x01 \x01(\x0e2$.kubling.provider.v1.QueryCompletionR\n" +
+	"completion\x12=\n" +
+	"\bwarnings\x18\x02 \x03(\v2!.kubling.provider.v1.QueryWarningR\bwarnings\"\xb0\x01\n" +
+	"\fQueryWarning\x12\x12\n" +
+	"\x04code\x18\x01 \x01(\tR\x04code\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x1c\n" +
+	"\tretryable\x18\x04 \x01(\bR\tretryable\x12<\n" +
+	"\x04role\x18\x05 \x01(\x0e2(.kubling.provider.v1.QueryDiagnosticRoleR\x04role*l\n" +
 	"\rSortDirection\x12\x1e\n" +
 	"\x1aSORT_DIRECTION_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18SORT_DIRECTION_ASCENDING\x10\x01\x12\x1d\n" +
@@ -548,7 +856,15 @@ const file_kubling_provider_v1_query_proto_rawDesc = "" +
 	"\fNullOrdering\x12\x1d\n" +
 	"\x19NULL_ORDERING_UNSPECIFIED\x10\x00\x12\x17\n" +
 	"\x13NULL_ORDERING_FIRST\x10\x01\x12\x16\n" +
-	"\x12NULL_ORDERING_LAST\x10\x02B\x7f\n" +
+	"\x12NULL_ORDERING_LAST\x10\x02*p\n" +
+	"\x0fQueryCompletion\x12 \n" +
+	"\x1cQUERY_COMPLETION_UNSPECIFIED\x10\x00\x12\x1d\n" +
+	"\x19QUERY_COMPLETION_COMPLETE\x10\x01\x12\x1c\n" +
+	"\x18QUERY_COMPLETION_PARTIAL\x10\x02*\x8f\x01\n" +
+	"\x13QueryDiagnosticRole\x12%\n" +
+	"!QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dQUERY_DIAGNOSTIC_ROLE_WARNING\x10\x01\x12.\n" +
+	"*QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE\x10\x02B\x7f\n" +
 	"\x19com.kubling.provider.grpcB\n" +
 	"QueryProtoP\x01ZTgithub.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1b\x06proto3"
 
@@ -564,36 +880,44 @@ func file_kubling_provider_v1_query_proto_rawDescGZIP() []byte {
 	return file_kubling_provider_v1_query_proto_rawDescData
 }
 
-var file_kubling_provider_v1_query_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_kubling_provider_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_kubling_provider_v1_query_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_kubling_provider_v1_query_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_kubling_provider_v1_query_proto_goTypes = []any{
-	(SortDirection)(0),      // 0: kubling.provider.v1.SortDirection
-	(NullOrdering)(0),       // 1: kubling.provider.v1.NullOrdering
-	(*QueryRequest)(nil),    // 2: kubling.provider.v1.QueryRequest
-	(*EntityReference)(nil), // 3: kubling.provider.v1.EntityReference
-	(*Projection)(nil),      // 4: kubling.provider.v1.Projection
-	(*OrderBy)(nil),         // 5: kubling.provider.v1.OrderBy
-	(*QueryResponse)(nil),   // 6: kubling.provider.v1.QueryResponse
-	(*Expression)(nil),      // 7: kubling.provider.v1.Expression
-	(*TupleBatch)(nil),      // 8: kubling.provider.v1.TupleBatch
+	(SortDirection)(0),       // 0: kubling.provider.v1.SortDirection
+	(NullOrdering)(0),        // 1: kubling.provider.v1.NullOrdering
+	(QueryCompletion)(0),     // 2: kubling.provider.v1.QueryCompletion
+	(QueryDiagnosticRole)(0), // 3: kubling.provider.v1.QueryDiagnosticRole
+	(*QueryRequest)(nil),     // 4: kubling.provider.v1.QueryRequest
+	(*EntityReference)(nil),  // 5: kubling.provider.v1.EntityReference
+	(*Projection)(nil),       // 6: kubling.provider.v1.Projection
+	(*OrderBy)(nil),          // 7: kubling.provider.v1.OrderBy
+	(*QueryResponse)(nil),    // 8: kubling.provider.v1.QueryResponse
+	(*QueryOutcome)(nil),     // 9: kubling.provider.v1.QueryOutcome
+	(*QueryWarning)(nil),     // 10: kubling.provider.v1.QueryWarning
+	(*Expression)(nil),       // 11: kubling.provider.v1.Expression
+	(*TupleBatch)(nil),       // 12: kubling.provider.v1.TupleBatch
 }
 var file_kubling_provider_v1_query_proto_depIdxs = []int32{
-	3,  // 0: kubling.provider.v1.QueryRequest.entity:type_name -> kubling.provider.v1.EntityReference
-	4,  // 1: kubling.provider.v1.QueryRequest.projections:type_name -> kubling.provider.v1.Projection
-	7,  // 2: kubling.provider.v1.QueryRequest.filter:type_name -> kubling.provider.v1.Expression
-	5,  // 3: kubling.provider.v1.QueryRequest.order_by:type_name -> kubling.provider.v1.OrderBy
-	7,  // 4: kubling.provider.v1.QueryRequest.group_by:type_name -> kubling.provider.v1.Expression
-	7,  // 5: kubling.provider.v1.QueryRequest.having:type_name -> kubling.provider.v1.Expression
-	7,  // 6: kubling.provider.v1.Projection.expression:type_name -> kubling.provider.v1.Expression
-	7,  // 7: kubling.provider.v1.OrderBy.expression:type_name -> kubling.provider.v1.Expression
+	5,  // 0: kubling.provider.v1.QueryRequest.entity:type_name -> kubling.provider.v1.EntityReference
+	6,  // 1: kubling.provider.v1.QueryRequest.projections:type_name -> kubling.provider.v1.Projection
+	11, // 2: kubling.provider.v1.QueryRequest.filter:type_name -> kubling.provider.v1.Expression
+	7,  // 3: kubling.provider.v1.QueryRequest.order_by:type_name -> kubling.provider.v1.OrderBy
+	11, // 4: kubling.provider.v1.QueryRequest.group_by:type_name -> kubling.provider.v1.Expression
+	11, // 5: kubling.provider.v1.QueryRequest.having:type_name -> kubling.provider.v1.Expression
+	11, // 6: kubling.provider.v1.Projection.expression:type_name -> kubling.provider.v1.Expression
+	11, // 7: kubling.provider.v1.OrderBy.expression:type_name -> kubling.provider.v1.Expression
 	0,  // 8: kubling.provider.v1.OrderBy.direction:type_name -> kubling.provider.v1.SortDirection
 	1,  // 9: kubling.provider.v1.OrderBy.null_ordering:type_name -> kubling.provider.v1.NullOrdering
-	8,  // 10: kubling.provider.v1.QueryResponse.batch:type_name -> kubling.provider.v1.TupleBatch
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	12, // 10: kubling.provider.v1.QueryResponse.batch:type_name -> kubling.provider.v1.TupleBatch
+	9,  // 11: kubling.provider.v1.QueryResponse.outcome:type_name -> kubling.provider.v1.QueryOutcome
+	2,  // 12: kubling.provider.v1.QueryOutcome.completion:type_name -> kubling.provider.v1.QueryCompletion
+	10, // 13: kubling.provider.v1.QueryOutcome.warnings:type_name -> kubling.provider.v1.QueryWarning
+	3,  // 14: kubling.provider.v1.QueryWarning.role:type_name -> kubling.provider.v1.QueryDiagnosticRole
+	15, // [15:15] is the sub-list for method output_type
+	15, // [15:15] is the sub-list for method input_type
+	15, // [15:15] is the sub-list for extension type_name
+	15, // [15:15] is the sub-list for extension extendee
+	0,  // [0:15] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_query_proto_init() }
@@ -609,8 +933,8 @@ func file_kubling_provider_v1_query_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kubling_provider_v1_query_proto_rawDesc), len(file_kubling_provider_v1_query_proto_rawDesc)),
-			NumEnums:      2,
-			NumMessages:   5,
+			NumEnums:      4,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
