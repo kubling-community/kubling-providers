@@ -14,5 +14,6 @@ Build and install into the local Maven repository from the project root:
 mvn --batch-mode --no-transfer-progress -f sdk-java/pom.xml clean install
 ```
 
-Consumers such as dbvirt can then declare the artifact as a normal dependency;
-they do not need copied protos or local code generation.
+Java consumers can declare the artifact as a normal dependency. A local install
+can be used to test unreleased binding changes without copying proto sources or
+adding consumer-side code generation.

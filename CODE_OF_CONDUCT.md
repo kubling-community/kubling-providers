@@ -59,10 +59,13 @@ representative at an online or offline event.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the repository maintainers through GitHub Issues. Do not include
-sensitive personal information in the issue; ask the maintainers to arrange a
-private follow-up when necessary. All complaints will be reviewed and
-investigated promptly and fairly.
+reported with GitHub's abuse or content-reporting controls when the behavior
+occurs on GitHub. Do not publish incident details or sensitive personal
+information in an Issue or Discussion. If no private project channel is
+available, open a minimal Issue asking the maintainers to arrange private
+contact.
+
+All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the
 reporter of any incident.

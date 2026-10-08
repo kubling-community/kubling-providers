@@ -89,11 +89,6 @@ the container. Override the configuration path with
 `KUBLING_CASSANDRA_CONFIG` or append `-config` and `-listen` arguments after
 the image name.
 
-Release tags use `providers/cassandra/vMAJOR.MINOR.PATCH`. Stable releases
-publish the exact `vMAJOR.MINOR.PATCH` tag and `latest` for `linux/amd64` and
-`linux/arm64`. Prereleases publish only their exact version; every release also
-publishes an immutable `sha-*` tag.
-
 ## Local environment
 
 The local fixture starts a single Cassandra node, creates and seeds the same

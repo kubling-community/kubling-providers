@@ -13,19 +13,10 @@ Kubling preserves mutable synthetic-table behavior with
 element, applies the insert, update or delete to the document, and sends the
 resulting parent mutation to the provider.
 
-## Existing directive mapping
-
-| Existing directive | Typed field |
-| --- | --- |
-| `synthetic_parent` | `TableMetadata.synthetic.parent` |
-| `synthetic_path` | `source_column` plus `path` |
-| `synthetic_type=parent` | `ParentColumnBinding` with `IMMEDIATE` scope |
-| `synthetic_type=parent_root` | `ParentColumnBinding` with `ROOT` scope |
-| `synthetic_type=parent_array_key` | `ParentColumnBinding.identifies_parent_element=true` |
-| `synthetic_parent_field` | `ParentColumnBinding.column` |
-| `synthetic_allow_bulk_insert` | `SyntheticMutationMetadata.allow_bulk_insert` |
-| Table `updatable` | `TableMetadata.updatable` plus operation-specific mutation flags |
-
 Normal `TableMetadata.keys` identify synthetic rows. Parent bindings marked
 with `identifies_parent_element` preserve the lineage required to mutate nested
 arrays.
+
+The provider contract is the source of truth for this typed metadata. Kubling
+DDL directives and engine-side mutation behavior are documented in the public
+[synthetic-table documentation](https://docs.kubling.com/engine/ddl).

@@ -31,5 +31,7 @@ issue.
 
 This policy covers the provider protocol, the Go SDK, official providers and
 their release automation in this repository. Vulnerabilities in the Kubling
-runtime or other Kubling projects should be reported through the security
-policy of the affected repository.
+runtime or another separately distributed Kubling component should be reported
+through the private security channel published with that component. If no such
+channel is available, follow the [support guidance](SUPPORT.md) to request
+private contact without disclosing vulnerability details.
