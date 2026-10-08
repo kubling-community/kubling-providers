@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"gopkg.in/yaml.v3"
 )
 
@@ -33,6 +34,7 @@ type Config struct {
 	HTTPClient        *http.Client
 	Discovery         *DiscoveryConfig
 	Entities          []EntityConfig
+	SemanticFragment  *providersdk.SemanticFragment
 }
 
 type DiscoveryConfig struct {
@@ -117,17 +119,18 @@ type PaginationConfig struct {
 }
 
 type fileConfig struct {
-	SpecFile          string                    `yaml:"specFile"`
-	SpecHeaders       map[string]string         `yaml:"specHeaders"`
-	BaseURL           string                    `yaml:"baseUrl"`
-	Namespace         string                    `yaml:"namespace"`
-	RequestTimeout    string                    `yaml:"requestTimeout"`
-	MaxResponseBytes  int64                     `yaml:"maxResponseBytes"`
-	AllowInsecureHTTP bool                      `yaml:"allowInsecureHttp"`
-	Headers           map[string]string         `yaml:"headers"`
-	Authentication    *fileAuthenticationConfig `yaml:"authentication"`
-	Discovery         *fileDiscoveryConfig      `yaml:"discovery"`
-	Entities          []fileEntityConfig        `yaml:"entities"`
+	SpecFile          string                                  `yaml:"specFile"`
+	SpecHeaders       map[string]string                       `yaml:"specHeaders"`
+	BaseURL           string                                  `yaml:"baseUrl"`
+	Namespace         string                                  `yaml:"namespace"`
+	RequestTimeout    string                                  `yaml:"requestTimeout"`
+	MaxResponseBytes  int64                                   `yaml:"maxResponseBytes"`
+	AllowInsecureHTTP bool                                    `yaml:"allowInsecureHttp"`
+	Headers           map[string]string                       `yaml:"headers"`
+	Authentication    *fileAuthenticationConfig               `yaml:"authentication"`
+	Discovery         *fileDiscoveryConfig                    `yaml:"discovery"`
+	Entities          []fileEntityConfig                      `yaml:"entities"`
+	Semantic          *providersdk.SemanticFragmentFileConfig `yaml:"semantic"`
 }
 
 type fileDiscoveryConfig struct {
@@ -256,6 +259,13 @@ func loadConfig(path string, requireEntities bool) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	var semanticFragment *providersdk.SemanticFragment
+	if serialized.Semantic != nil {
+		semanticFragment, err = providersdk.LoadSemanticFragmentFile(path, *serialized.Semantic)
+		if err != nil {
+			return Config{}, fmt.Errorf("load OpenAPI semantic fragment: %w", err)
+		}
+	}
 
 	return normalizeConfigWithEntityRequirement(Config{
 		SpecFile:          specFile,
@@ -269,6 +279,7 @@ func loadConfig(path string, requireEntities bool) (Config, error) {
 		Authentication:    serialized.Authentication.toConfig(),
 		Discovery:         serialized.Discovery.toConfig(),
 		Entities:          entities,
+		SemanticFragment:  semanticFragment,
 	}, requireEntities)
 }
 
@@ -345,6 +356,12 @@ func normalizeConfigWithEntityRequirement(config Config, requireEntities bool) (
 		HTTPClient:        config.HTTPClient,
 		Discovery:         cloneDiscovery(config.Discovery),
 		Entities:          make([]EntityConfig, len(config.Entities)),
+		SemanticFragment:  providersdk.CloneSemanticFragment(config.SemanticFragment),
+	}
+	if normalized.SemanticFragment != nil {
+		if err := providersdk.ValidateSemanticFragment(normalized.SemanticFragment); err != nil {
+			return Config{}, fmt.Errorf("semantic fragment: %w", err)
+		}
 	}
 	if normalized.SpecFile == "" {
 		return Config{}, errors.New("specFile is required")

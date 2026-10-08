@@ -60,6 +60,23 @@ The SDK query cache is deliberately disabled. Writes performed by clients
 outside this provider cannot be observed reliably, so automatic invalidation
 would not be safe.
 
+## Semantic model
+
+A deployment may associate a source-local semantic fragment with its configured
+data model:
+
+```yaml
+semantic:
+  fragmentFile: ./inventory.semantic.yaml
+  mediaType: application/yaml
+  version: <model-version>
+```
+
+The file is resolved relative to the provider configuration and returned
+unchanged. Cassandra metadata is not enough to infer domain relationships or
+cardinalities, so the provider never generates them. Omitting `semantic` is
+valid and returns no fragment.
+
 ## Run
 
 Start from this module using an external configuration file:

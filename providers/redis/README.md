@@ -67,6 +67,22 @@ the structured metadata path. Kubling uses that property when sending the
 entity reference back to the provider. The example value `sample` matches the
 namespace key in `config.example.yaml`.
 
+## Semantic model
+
+A deployment may associate a source-local semantic fragment with its Redis
+schema:
+
+```yaml
+semantic:
+  fragmentFile: ./redis.semantic.yaml
+  mediaType: application/yaml
+  version: <model-version>
+```
+
+The file is resolved relative to the provider configuration and returned
+unchanged. The provider does not infer relationships from hash names, key
+prefixes or field shapes. Omitting `semantic` is valid and returns no fragment.
+
 ## Local environment
 
 The local fixture starts Redis, seeds the same project-management domain used

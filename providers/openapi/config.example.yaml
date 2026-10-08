@@ -13,6 +13,13 @@ baseUrl: ${OPENAPI_BASE_URL:-}
 discovery:
   enabled: true
 
+# Optionally expose a local semantic model for this API. Relative paths are
+# resolved from this provider configuration.
+# semantic:
+#   fragmentFile: ./api.semantic.yaml
+#   mediaType: application/yaml
+#   version: <model-version>
+
 # Add explicit entities only for operations that need overrides such as a
 # primary or stable key, pagination, fixed parameters or a less mechanical
 # table name. Stable keys are never inferred from the OpenAPI document.

@@ -1,0 +1,137 @@
+{
+  "format": "kubling-semantic",
+  "schemaVersion": 1,
+  "kind": "fragment",
+  "metadata": {
+    "name": "in-memory-project-management",
+    "namespace": "inmemory",
+    "version": "1.0.0"
+  },
+  "spec": {
+    "entities": [
+      {
+        "id": "Project",
+        "name": "Project",
+        "description": "A project in the canonical in-memory fixture.",
+        "binding": {
+          "relation": "PROJECT"
+        },
+        "properties": [
+          {
+            "id": "id",
+            "name": "Project ID",
+            "type": "string",
+            "binding": {
+              "field": "id"
+            }
+          },
+          {
+            "id": "name",
+            "name": "Project name",
+            "type": "string",
+            "binding": {
+              "field": "name"
+            }
+          },
+          {
+            "id": "status",
+            "name": "Project status",
+            "type": "string",
+            "binding": {
+              "field": "status"
+            }
+          },
+          {
+            "id": "active",
+            "name": "Active",
+            "type": "boolean",
+            "binding": {
+              "field": "active"
+            }
+          }
+        ],
+        "identities": [
+          {
+            "id": "projectIdentity",
+            "properties": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "id": "Task",
+        "name": "Task",
+        "description": "A task belonging to a project in the canonical in-memory fixture.",
+        "binding": {
+          "relation": "TASK"
+        },
+        "properties": [
+          {
+            "id": "id",
+            "name": "Task ID",
+            "type": "string",
+            "binding": {
+              "field": "id"
+            }
+          },
+          {
+            "id": "projectId",
+            "name": "Project ID",
+            "type": "string",
+            "binding": {
+              "field": "project_id"
+            }
+          },
+          {
+            "id": "title",
+            "name": "Task title",
+            "type": "string",
+            "binding": {
+              "field": "title"
+            }
+          },
+          {
+            "id": "completed",
+            "name": "Completed",
+            "type": "boolean",
+            "binding": {
+              "field": "completed"
+            }
+          },
+          {
+            "id": "priority",
+            "name": "Priority",
+            "type": "integer",
+            "binding": {
+              "field": "priority"
+            }
+          }
+        ],
+        "identities": [
+          {
+            "id": "taskIdentity",
+            "properties": [
+              "id"
+            ]
+          }
+        ]
+      }
+    ],
+    "relationships": [
+      {
+        "id": "ProjectHasTasks",
+        "name": "Project has tasks",
+        "from": "Project",
+        "to": "Task",
+        "cardinality": "oneToMany",
+        "joins": [
+          {
+            "left": "Project.id",
+            "right": "Task.projectId"
+          }
+        ]
+      }
+    ]
+  }
+}

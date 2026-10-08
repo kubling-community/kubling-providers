@@ -12,6 +12,7 @@ import (
 	"time"
 
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 	"gopkg.in/yaml.v3"
 )
 
@@ -27,7 +28,8 @@ const (
 
 // Config defines every logical Redis namespace exposed by this provider.
 type Config struct {
-	Namespaces map[string]NamespaceConfig
+	Namespaces       map[string]NamespaceConfig
+	SemanticFragment *providersdk.SemanticFragment
 }
 
 // NamespaceConfig configures one Redis database and its relational model.
@@ -75,7 +77,8 @@ type ColumnConfig struct {
 }
 
 type fileConfig struct {
-	Namespaces map[string]fileNamespaceConfig `yaml:"namespaces"`
+	Namespaces map[string]fileNamespaceConfig          `yaml:"namespaces"`
+	Semantic   *providersdk.SemanticFragmentFileConfig `yaml:"semantic"`
 }
 
 type fileNamespaceConfig struct {
@@ -135,6 +138,13 @@ func LoadConfig(path string) (Config, error) {
 			return Config{}, fmt.Errorf("namespace %q: %w", namespace, err)
 		}
 		config.Namespaces[namespace] = namespaceConfig
+	}
+	if serialized.Semantic != nil {
+		semanticFragment, err := providersdk.LoadSemanticFragmentFile(path, *serialized.Semantic)
+		if err != nil {
+			return Config{}, fmt.Errorf("load Redis semantic fragment: %w", err)
+		}
+		config.SemanticFragment = semanticFragment
 	}
 
 	return normalizeConfig(config)
@@ -253,7 +263,15 @@ func normalizeConfig(config Config) (Config, error) {
 	if len(config.Namespaces) == 0 {
 		return Config{}, errors.New("at least one Redis namespace is required")
 	}
-	normalized := Config{Namespaces: make(map[string]NamespaceConfig, len(config.Namespaces))}
+	normalized := Config{
+		Namespaces:       make(map[string]NamespaceConfig, len(config.Namespaces)),
+		SemanticFragment: providersdk.CloneSemanticFragment(config.SemanticFragment),
+	}
+	if normalized.SemanticFragment != nil {
+		if err := providersdk.ValidateSemanticFragment(normalized.SemanticFragment); err != nil {
+			return Config{}, fmt.Errorf("semantic fragment: %w", err)
+		}
+	}
 	for namespace, candidate := range config.Namespaces {
 		if namespace == "" || strings.TrimSpace(namespace) != namespace {
 			return Config{}, fmt.Errorf("invalid namespace %q", namespace)

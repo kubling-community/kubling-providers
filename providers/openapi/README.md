@@ -121,6 +121,20 @@ HTTP request to `https://billing.example.com/api/invoices`.
 `namespace` is an opaque logical grouping returned unchanged to Kubling. It
 does not expose the API endpoint or physical topology.
 
+An API-specific semantic fragment can be exposed with optional configuration:
+
+```yaml
+semantic:
+  fragmentFile: ./billing.semantic.yaml
+  mediaType: application/yaml
+  version: <model-version>
+```
+
+The fragment file must be local and is resolved relative to the provider
+configuration. Its bytes are returned unchanged. The provider does not infer
+domain relationships, identities or cardinalities from the OpenAPI document;
+when `semantic` is absent, no fragment is returned.
+
 `maxResponseBytes` limits each successful JSON response page before decoding.
 It defaults to 32 MiB and cannot exceed 1 GiB. This prevents a broken or
 malicious endpoint from growing the provider process without bound; increase

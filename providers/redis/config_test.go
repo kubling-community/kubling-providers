@@ -1,6 +1,7 @@
 package redis
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,42 @@ import (
 	"time"
 
 	kublingv1 "github.com/kubling-community/kubling-grpc/sdk-go/kubling/v1"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 )
+
+func TestLoadConfigReadsRelativeSemanticFragment(t *testing.T) {
+	directory := t.TempDir()
+	document := []byte("format: kubling-semantic\nkind: fragment\n")
+	writeTestFile(t, filepath.Join(directory, "redis.semantic.yaml"), string(document))
+	writeTestFile(t, filepath.Join(directory, "schema.yaml"), `
+tables:
+  - name: TASK
+    structure: hash
+    key:
+      name: id
+      type: STRING
+`)
+	configPath := filepath.Join(directory, "provider.yaml")
+	writeTestFile(t, configPath, `
+semantic:
+  fragmentFile: redis.semantic.yaml
+  mediaType: application/yaml
+  version: task-model
+namespaces:
+  sample:
+    schemaFile: schema.yaml
+`)
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	fragment := config.SemanticFragment
+	if fragment == nil || !bytes.Equal(fragment.Document, document) ||
+		fragment.MediaType != "application/yaml" || fragment.Version != "task-model" {
+		t.Fatalf("LoadConfig() semantic fragment = %#v", fragment)
+	}
+}
 
 func TestLoadConfigReadsStrictExternalSchema(t *testing.T) {
 	directory := t.TempDir()
@@ -156,8 +192,13 @@ func TestNewCopiesProgrammaticConfig(t *testing.T) {
 		Updatable: true,
 	}}
 	tlsConfig := &TLSConfig{ServerName: "redis.internal"}
+	semanticDocument := []byte("{}\n")
 	provider, err := New(Config{Namespaces: map[string]NamespaceConfig{
 		"sample": {Tables: tables, TLS: tlsConfig},
+	}, SemanticFragment: &providersdk.SemanticFragment{
+		Document:  semanticDocument,
+		MediaType: providersdk.SemanticFragmentMediaTypeJSON,
+		Version:   "redis-model",
 	}})
 	if err != nil {
 		t.Fatalf("New() error = %v", err)
@@ -166,12 +207,16 @@ func TestNewCopiesProgrammaticConfig(t *testing.T) {
 	tables[0].Name = "CHANGED"
 	fields[0].Name = "changed"
 	tlsConfig.ServerName = "changed"
+	semanticDocument[0] = '['
 	stored := provider.config.Namespaces["sample"]
 	if stored.Tables[0].Name != "TASK" || stored.Tables[0].Fields[0].Name != "title" {
 		t.Fatalf("New() retained caller-owned slices: %#v", stored.Tables)
 	}
 	if stored.TLS.ServerName != "redis.internal" {
 		t.Fatalf("New() retained caller-owned TLS = %#v", stored.TLS)
+	}
+	if string(provider.config.SemanticFragment.Document) != "{}\n" {
+		t.Fatalf("New() retained caller-owned semantic document = %q", provider.config.SemanticFragment.Document)
 	}
 }
 

@@ -1,3 +1,9 @@
+# Optionally expose a local semantic model for the configured data model.
+# semantic:
+#   fragmentFile: ./cassandra.semantic.yaml
+#   mediaType: application/yaml
+#   version: <model-version>
+
 namespaceColumn:
   enabled: true
   name: kubling_namespace

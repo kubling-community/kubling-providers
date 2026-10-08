@@ -1,6 +1,7 @@
 package cassandra
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -8,7 +9,40 @@ import (
 	"time"
 
 	"github.com/apache/cassandra-gocql-driver/v2"
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 )
+
+func TestLoadConfigReadsRelativeSemanticFragment(t *testing.T) {
+	directory := t.TempDir()
+	document := []byte("format: kubling-semantic\nkind: fragment\n")
+	fragmentPath := filepath.Join(directory, "inventory.semantic.yaml")
+	if err := os.WriteFile(fragmentPath, document, 0o600); err != nil {
+		t.Fatalf("os.WriteFile(fragment) error = %v", err)
+	}
+	configPath := filepath.Join(directory, "cassandra.yaml")
+	if err := os.WriteFile(configPath, []byte(`
+semantic:
+  fragmentFile: inventory.semantic.yaml
+  mediaType: application/yaml
+  version: inventory-model
+namespaces:
+  inventory:
+    hosts: [localhost]
+    keyspace: inventory
+`), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(config) error = %v", err)
+	}
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	fragment := config.SemanticFragment
+	if fragment == nil || !bytes.Equal(fragment.Document, document) ||
+		fragment.MediaType != "application/yaml" || fragment.Version != "inventory-model" {
+		t.Fatalf("LoadConfig() semantic fragment = %#v", fragment)
+	}
+}
 
 func TestExampleKublingDDLIncludesEquivalentTablesAndNamespace(t *testing.T) {
 	ddl, err := os.ReadFile("schema.example.sql")
@@ -108,6 +142,7 @@ namespaces:
 
 func TestNormalizeConfigDefaultsAndCopies(t *testing.T) {
 	hosts := []string{" localhost "}
+	semanticDocument := []byte("{}\n")
 	config, err := normalizeConfig(Config{
 		DataSources: map[string]DataSourceConfig{
 			"default": {
@@ -115,12 +150,18 @@ func TestNormalizeConfigDefaultsAndCopies(t *testing.T) {
 				Keyspace: " inventory ",
 			},
 		},
+		SemanticFragment: &providersdk.SemanticFragment{
+			Document:  semanticDocument,
+			MediaType: providersdk.SemanticFragmentMediaTypeJSON,
+			Version:   "cassandra-model",
+		},
 	})
 	if err != nil {
 		t.Fatalf("normalizeConfig() error = %v", err)
 	}
 
 	hosts[0] = "changed"
+	semanticDocument[0] = '['
 	dataSource := config.DataSources["default"]
 	if dataSource.Hosts[0] != "localhost" {
 		t.Fatalf("normalizeConfig() host = %q, want localhost", dataSource.Hosts[0])
@@ -139,6 +180,9 @@ func TestNormalizeConfigDefaultsAndCopies(t *testing.T) {
 	}
 	if dataSource.Consistency != defaultConsistency {
 		t.Fatalf("normalizeConfig() consistency = %q", dataSource.Consistency)
+	}
+	if string(config.SemanticFragment.Document) != "{}\n" {
+		t.Fatalf("normalizeConfig() retained caller-owned semantic document = %q", config.SemanticFragment.Document)
 	}
 }
 

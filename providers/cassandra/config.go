@@ -25,9 +25,10 @@ const (
 // Config defines the logical namespaces and Cassandra connection settings
 // owned by this provider process.
 type Config struct {
-	DataSources     map[string]DataSourceConfig
-	NamespaceColumn NamespaceColumnConfig
-	Pushdown        PushdownConfig
+	DataSources      map[string]DataSourceConfig
+	NamespaceColumn  NamespaceColumnConfig
+	Pushdown         PushdownConfig
+	SemanticFragment *providersdk.SemanticFragment
 }
 
 // NamespaceColumnConfig controls whether source namespaces are exposed as a
@@ -67,9 +68,10 @@ type TLSConfig struct {
 }
 
 type fileConfig struct {
-	NamespaceColumn fileNamespaceColumnConfig       `yaml:"namespaceColumn"`
-	Pushdown        filePushdownConfig              `yaml:"pushdown"`
-	Namespaces      map[string]fileDataSourceConfig `yaml:"namespaces"`
+	NamespaceColumn fileNamespaceColumnConfig               `yaml:"namespaceColumn"`
+	Pushdown        filePushdownConfig                      `yaml:"pushdown"`
+	Namespaces      map[string]fileDataSourceConfig         `yaml:"namespaces"`
+	Semantic        *providersdk.SemanticFragmentFileConfig `yaml:"semantic"`
 }
 
 type fileNamespaceColumnConfig struct {
@@ -137,6 +139,13 @@ func LoadConfig(path string) (Config, error) {
 			Aggregates: serialized.Pushdown.Aggregates,
 		},
 	}
+	if serialized.Semantic != nil {
+		semanticFragment, err := providersdk.LoadSemanticFragmentFile(path, *serialized.Semantic)
+		if err != nil {
+			return Config{}, fmt.Errorf("load Cassandra semantic fragment: %w", err)
+		}
+		config.SemanticFragment = semanticFragment
+	}
 	for namespace, serializedDataSource := range serialized.Namespaces {
 		dataSource, err := serializedDataSource.toConfig()
 		if err != nil {
@@ -202,8 +211,14 @@ func normalizeConfig(config Config) (Config, error) {
 	}
 
 	normalized := Config{
-		DataSources: make(map[string]DataSourceConfig, len(config.DataSources)),
-		Pushdown:    config.Pushdown,
+		DataSources:      make(map[string]DataSourceConfig, len(config.DataSources)),
+		Pushdown:         config.Pushdown,
+		SemanticFragment: providersdk.CloneSemanticFragment(config.SemanticFragment),
+	}
+	if normalized.SemanticFragment != nil {
+		if err := providersdk.ValidateSemanticFragment(normalized.SemanticFragment); err != nil {
+			return Config{}, fmt.Errorf("semantic fragment: %w", err)
+		}
 	}
 	namespaceColumn, err := normalizeNamespaceColumnConfig(config.NamespaceColumn)
 	if err != nil {

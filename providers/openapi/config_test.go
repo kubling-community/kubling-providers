@@ -1,11 +1,42 @@
 package openapi
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 )
+
+func TestLoadConfigReadsRelativeSemanticFragment(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "provider.yaml")
+	document := []byte("{\"format\":\"kubling-semantic\",\"kind\":\"fragment\"}\n")
+	writeTestFile(t, filepath.Join(directory, "billing.semantic.json"), string(document))
+	writeTestFile(t, configPath, `
+specFile: api.yaml
+baseUrl: https://billing.example.test/api
+semantic:
+  fragmentFile: billing.semantic.json
+  mediaType: application/json
+  version: billing-model
+entities:
+  - name: INVOICE
+    listOperation: listInvoices
+`)
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	fragment := config.SemanticFragment
+	if fragment == nil || !bytes.Equal(fragment.Document, document) ||
+		fragment.MediaType != "application/json" || fragment.Version != "billing-model" {
+		t.Fatalf("LoadConfig() semantic fragment = %#v", fragment)
+	}
+}
 
 func TestLoadConfigReadsStrictEntityMappings(t *testing.T) {
 	directory := t.TempDir()
@@ -134,6 +165,27 @@ func TestNormalizeConfigDefaultsAndValidatesMaxResponseBytes(t *testing.T) {
 	config.MaxResponseBytes = maxResponseBytesLimit + 1
 	if _, err := normalizeConfig(config); err == nil || !strings.Contains(err.Error(), "maxResponseBytes must not exceed") {
 		t.Fatalf("normalizeConfig() error = %v, want maxResponseBytes upper bound", err)
+	}
+}
+
+func TestNormalizeConfigCopiesSemanticFragment(t *testing.T) {
+	document := []byte("{}\n")
+	normalized, err := normalizeConfig(Config{
+		SpecFile:  "api.yaml",
+		BaseURL:   "https://api.example.test",
+		Discovery: &DiscoveryConfig{Enabled: true},
+		SemanticFragment: &providersdk.SemanticFragment{
+			Document:  document,
+			MediaType: providersdk.SemanticFragmentMediaTypeJSON,
+			Version:   "api-model",
+		},
+	})
+	if err != nil {
+		t.Fatalf("normalizeConfig() error = %v", err)
+	}
+	document[0] = '['
+	if string(normalized.SemanticFragment.Document) != "{}\n" {
+		t.Fatalf("normalizeConfig() retained caller document = %q", normalized.SemanticFragment.Document)
 	}
 }
 
@@ -294,6 +346,26 @@ entities:
 	_, err := LoadConfig(configPath)
 	if err == nil || !strings.Contains(err.Error(), "field unexpected not found") {
 		t.Fatalf("LoadConfig() error = %v, want strict YAML error", err)
+	}
+}
+
+func TestLoadConfigRejectsUnknownSemanticField(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "provider.yaml")
+	writeTestFile(t, configPath, `
+specFile: api.yaml
+semantic:
+  fragmentFile: api.semantic.yaml
+  mediaType: application/yaml
+  version: api-model
+  inferredRelationships: true
+entities:
+  - name: INVOICE
+    listOperation: listInvoices
+`)
+
+	_, err := LoadConfig(configPath)
+	if err == nil || !strings.Contains(err.Error(), "field inferredRelationships not found") {
+		t.Fatalf("LoadConfig() error = %v, want strict semantic YAML error", err)
 	}
 }
 
