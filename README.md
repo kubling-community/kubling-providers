@@ -42,8 +42,6 @@ The protocol and generated bindings are released together. Provider runtimes
 keep independent lifecycles. See the [maintainer release
 process](docs/maintainers/releases.md).
 
-Linux package hosting is provided by [Cloudsmith](https://cloudsmith.com/).
-
 ## Contributing
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md), [`testing/README.md`](testing/README.md)

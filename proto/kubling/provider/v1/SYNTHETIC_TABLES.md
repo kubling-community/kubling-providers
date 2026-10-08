@@ -19,4 +19,4 @@ arrays.
 
 The provider contract is the source of truth for this typed metadata. Kubling
 DDL directives and engine-side mutation behavior are documented in the public
-[synthetic-table documentation](https://docs.kubling.com/engine/ddl).
+[synthetic-table documentation](https://docs.kubling.com/engine/ddl#synthetic-tables).
