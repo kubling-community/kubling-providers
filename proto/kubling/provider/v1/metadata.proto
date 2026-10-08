@@ -80,6 +80,32 @@ message TableMetadata {
   // Providers may leave this unset. Kubling may add synthetic tables while
   // composing the final logical schema without involving provider execution.
   SyntheticTableMetadata synthetic = 10;
+
+  // Alternative predicate requirements for accessing this table.
+  //
+  // At least one declared pattern must be satisfied before Kubling accesses
+  // the table. Every column inside the selected pattern is required. A pattern
+  // may be satisfied by explicit query criteria or by values supplied through
+  // a dependent join. An empty list means that unrestricted access is allowed.
+  //
+  // Access patterns describe source access constraints. They do not imply
+  // uniqueness, row identity or an index.
+  repeated AccessPatternMetadata access_patterns = 11;
+}
+
+// One alternative set of columns required to access a table.
+message AccessPatternMetadata {
+  // Non-empty name unique among the table's access patterns.
+  string name = 1;
+
+  // One or more unique logical names from the containing table's columns.
+  // Every listed column is required.
+  repeated string columns = 2;
+
+  // Provider-defined access-pattern properties.
+  //
+  // Property values must not contain credentials or other secrets.
+  map<string, string> properties = 3;
 }
 
 // Logical column exposed by a table.

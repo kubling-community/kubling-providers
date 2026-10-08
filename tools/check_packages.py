@@ -32,6 +32,7 @@ def java():
             [package + name + ".class" for name in (
                 "ProviderServiceGrpc",
                 "Field",
+                "AccessPatternMetadata",
                 "ValueCapabilities",
                 "ReadLobRequest",
             )]

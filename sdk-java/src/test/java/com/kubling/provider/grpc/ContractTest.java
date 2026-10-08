@@ -137,6 +137,21 @@ class ContractTest {
   }
 
   @Test
+  void preservesTableAccessPatterns() throws Exception {
+    AccessPatternMetadata pattern = AccessPatternMetadata.newBuilder()
+        .setName("AP_PROCESSES_HOST_ID")
+        .addColumns("host_id")
+        .build();
+    TableMetadata table = TableMetadata.newBuilder()
+        .setName("PROCESSES")
+        .addAccessPatterns(pattern)
+        .build();
+
+    TableMetadata decoded = TableMetadata.parseFrom(table.toByteArray());
+    assertEquals(pattern, decoded.getAccessPatterns(0));
+  }
+
+  @Test
   void exposesProviderAndLobServiceDescriptors() {
     assertEquals(
         MethodDescriptor.MethodType.SERVER_STREAMING,

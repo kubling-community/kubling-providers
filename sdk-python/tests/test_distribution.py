@@ -8,6 +8,7 @@ import grpc
 from kubling.provider.v1 import (
     capabilities_pb2,
     expression_pb2,
+    metadata_pb2,
     provider_pb2_grpc,
     query_pb2,
     tuple_pb2,
@@ -179,6 +180,20 @@ class DistributionTest(unittest.TestCase):
                 capabilities.SerializeToString()
             ).partial_results
         )
+
+    def test_preserves_table_access_patterns(self):
+        table = metadata_pb2.TableMetadata(
+            name="PROCESSES",
+            access_patterns=[
+                metadata_pb2.AccessPatternMetadata(
+                    name="AP_PROCESSES_HOST_ID",
+                    columns=["host_id"],
+                )
+            ],
+        )
+
+        decoded = metadata_pb2.TableMetadata.FromString(table.SerializeToString())
+        self.assertEqual(decoded.access_patterns[0], table.access_patterns[0])
 
     def test_constructs_provider_stub_without_connecting(self):
         with grpc.insecure_channel("localhost:1") as channel:
