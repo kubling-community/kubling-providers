@@ -525,9 +525,17 @@ type QueryCapabilities struct {
 	// Expression operators that the provider can evaluate exactly.
 	Expressions *ExpressionCapabilities `protobuf:"bytes,5,opt,name=expressions,proto3" json:"expressions,omitempty"`
 	// Set-oriented operations that the provider can evaluate exactly.
-	Aggregates    *AggregateCapabilities `protobuf:"bytes,6,opt,name=aggregates,proto3" json:"aggregates,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Aggregates *AggregateCapabilities `protobuf:"bytes,6,opt,name=aggregates,proto3" json:"aggregates,omitempty"`
+	// True when this provider can return valid rows together with an explicit
+	// PARTIAL QueryOutcome.
+	//
+	// Kubling still decides per request whether partial results are allowed. A
+	// deployment configured for strict source completeness must advertise false
+	// even when its implementation can technically continue after a target
+	// failure.
+	PartialResults bool `protobuf:"varint,7,opt,name=partial_results,json=partialResults,proto3" json:"partial_results,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *QueryCapabilities) Reset() {
@@ -600,6 +608,13 @@ func (x *QueryCapabilities) GetAggregates() *AggregateCapabilities {
 		return x.Aggregates
 	}
 	return nil
+}
+
+func (x *QueryCapabilities) GetPartialResults() bool {
+	if x != nil {
+		return x.PartialResults
+	}
+	return false
 }
 
 // Expression operators supported by a provider.
@@ -980,7 +995,7 @@ const file_kubling_provider_v1_capabilities_proto_rawDesc = "" +
 	"schema_ddl\x18\x01 \x01(\tR\tschemaDdl\x12?\n" +
 	"\bmetadata\x18\x02 \x01(\v2#.kubling.provider.v1.SchemaMetadataR\bmetadata\"7\n" +
 	"\x17TransactionCapabilities\x12\x1c\n" +
-	"\tsupported\x18\x01 \x01(\bR\tsupported\"\xa0\x03\n" +
+	"\tsupported\x18\x01 \x01(\bR\tsupported\"\xc9\x03\n" +
 	"\x11QueryCapabilities\x12+\n" +
 	"\x11requires_criteria\x18\x01 \x01(\bR\x10requiresCriteria\x12E\n" +
 	"\bordering\x18\x02 \x01(\v2).kubling.provider.v1.OrderingCapabilitiesR\bordering\x12K\n" +
@@ -991,7 +1006,8 @@ const file_kubling_provider_v1_capabilities_proto_rawDesc = "" +
 	"\vexpressions\x18\x05 \x01(\v2+.kubling.provider.v1.ExpressionCapabilitiesR\vexpressions\x12J\n" +
 	"\n" +
 	"aggregates\x18\x06 \x01(\v2*.kubling.provider.v1.AggregateCapabilitiesR\n" +
-	"aggregates\"\x80\x03\n" +
+	"aggregates\x12'\n" +
+	"\x0fpartial_results\x18\a \x01(\bR\x0epartialResults\"\x80\x03\n" +
 	"\x16ExpressionCapabilities\x12Z\n" +
 	"\x14comparison_operators\x18\x01 \x03(\x0e2'.kubling.provider.v1.ComparisonOperatorR\x13comparisonOperators\x12Q\n" +
 	"\x11logical_operators\x18\x02 \x03(\x0e2$.kubling.provider.v1.LogicalOperatorR\x10logicalOperators\x12d\n" +

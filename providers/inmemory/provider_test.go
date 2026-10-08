@@ -738,12 +738,12 @@ func TestProviderCacheInvalidatesSuccessfulMutations(t *testing.T) {
 	}
 }
 
-func newTestClient(t *testing.T) providerv1.ProviderServiceClient {
+func newTestClient(t *testing.T, options ...Option) providerv1.ProviderServiceClient {
 	t.Helper()
 
 	listener := bufconn.Listen(1024 * 1024)
 	grpcServer := grpc.NewServer()
-	cachedProvider, _ := providercache.Wrap(New(), providercache.Config{})
+	cachedProvider, _ := providercache.Wrap(New(options...), providercache.Config{})
 	service := providersdk.NewServer(cachedProvider)
 	providerv1.RegisterProviderServiceServer(grpcServer, service)
 

@@ -6,6 +6,10 @@ The gRPC contract, generated bindings and external data-source providers for
 Providers keep source-specific connectivity and execution outside the engine.
 The Go SDK supplies the server runtime used by the official providers.
 
+This repository and its Apache-2.0 license cover the contract, bindings and
+provider implementations stored here. Other Kubling components are distributed
+separately and may use different terms.
+
 ## Repository layout
 
 - `proto/` — provider gRPC contract, published through Buf.
@@ -15,22 +19,28 @@ The Go SDK supplies the server runtime used by the official providers.
 - `providers/` — provider implementations and examples.
 - `testing/` — shared compatibility tooling.
 
+## Semantic metadata
+
+Providers may optionally distribute source-local semantic metadata. See the
+[semantic fragment guide](docs/semantic-fragments.md) for the contract,
+authoring rules and the recommended model for each provider.
+
 ## Development
 
 ```sh
 ./generate.sh
-cd sdk-go && go mod tidy
-go test ./...
+(cd sdk-go && go mod tidy && go test ./...)
 ```
 
 Use `./generate.sh go`, `java` or `python` to generate only one language.
 Go sources are versioned; Java and Python sources are generated while building
-their packages.
+their packages. Run tests for a provider from that provider's module directory.
 
 ## Releases
 
 The protocol and generated bindings are released together. Provider runtimes
-keep independent lifecycles. See [`docs/releases.md`](docs/releases.md).
+keep independent lifecycles. See the [maintainer release
+process](docs/maintainers/releases.md).
 
 ## Contributing
 

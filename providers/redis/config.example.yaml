@@ -1,3 +1,9 @@
+# Optionally expose a local semantic model for these schema mappings.
+# semantic:
+#   fragmentFile: ./redis.semantic.yaml
+#   mediaType: application/yaml
+#   version: <model-version>
+
 namespaces:
   sample:
     address: redis.internal:6379

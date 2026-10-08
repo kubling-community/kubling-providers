@@ -73,7 +73,7 @@ jobs:
         run: |
           buf build --error-format github-actions
           buf lint --error-format github-actions
-          buf breaking --against 'buf.build/kubling/kubling-providers:v0.4.0' --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.5.0' --error-format github-actions
 
   go:
     name: Validate Go SDK and providers
@@ -97,7 +97,7 @@ jobs:
           git diff --exit-code -- sdk-go
       - name: Build and test all Go modules
         run: |
-          for module in sdk-go providers/cassandra providers/inmemory providers/kubernetes providers/openapi providers/redis testing; do
+          for module in sdk-go providers/cassandra providers/host providers/inmemory providers/kubernetes providers/openapi providers/redis testing; do
             (cd "${module}" && go build ./... && go vet ./... && go test -race ./...)
           done
 
@@ -212,7 +212,7 @@ jobs:
         run: |
           buf build --error-format github-actions
           buf lint --error-format github-actions
-          buf breaking --against 'buf.build/kubling/kubling-providers:v0.4.0' --error-format github-actions
+          buf breaking --against 'buf.build/kubling/kubling-providers:v0.5.0' --error-format github-actions
           buf push \
             --label main \
             --label "v${RELEASE_VERSION}" \

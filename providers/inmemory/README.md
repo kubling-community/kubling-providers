@@ -50,6 +50,15 @@ metadata path used by providers that discover schemas dynamically.
 deprecated XML representation. `VALUE_TYPE_UNKNOWN` is metadata for an
 unspecified type rather than a column type.
 
+## Semantic model
+
+The provider has no default semantic fragment. Tests and embedded examples can
+attach one to a particular fixture with `WithSemanticFragment`; the query cache
+preserves that optional capability. The
+[`project-management.json`](examples/semantic/project-management.json) example
+binds the canonical `PROJECT` and `TASK` fixture without claiming to be a
+universal in-memory model.
+
 ## Capabilities
 
 - Queries with projections, filters, ordering, limit, offset, and streamed

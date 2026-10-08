@@ -1,0 +1,14 @@
+# Configuration paired with fragment.yaml. Connection details may be changed,
+# but schema settings are part of the reference profile.
+kubeconfig: local/kubeconfig.local.yaml
+namespace: k3s-reference
+
+requestTimeout: 30s
+qps: 50
+burst: 100
+blankNamespaceStrategy: ALL
+
+schema:
+  # The deepest binding in the reference has six path segments.
+  fieldExpansionDepth: 6
+  includeObject: true

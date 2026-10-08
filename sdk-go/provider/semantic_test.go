@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -11,6 +13,128 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+func TestLoadSemanticFragmentFilePreservesRelativeDocument(t *testing.T) {
+	directory := t.TempDir()
+	configurationPath := filepath.Join(directory, "provider.yaml")
+	fragmentPath := filepath.Join(directory, "billing.semantic.yaml")
+	document := []byte("format: kubling-semantic\nmetadata:\n  name: billing\n")
+	if err := os.WriteFile(fragmentPath, document, 0o600); err != nil {
+		t.Fatalf("os.WriteFile() error = %v", err)
+	}
+
+	fragment, err := LoadSemanticFragmentFile(
+		configurationPath,
+		SemanticFragmentFileConfig{
+			FragmentFile: "billing.semantic.yaml",
+			MediaType:    SemanticFragmentMediaTypeYAML,
+			Version:      "billing-v1",
+		},
+	)
+	if err != nil {
+		t.Fatalf("LoadSemanticFragmentFile() error = %v", err)
+	}
+	if !bytes.Equal(fragment.Document, document) ||
+		fragment.MediaType != SemanticFragmentMediaTypeYAML ||
+		fragment.Version != "billing-v1" {
+		t.Fatalf("LoadSemanticFragmentFile() = %#v", fragment)
+	}
+}
+
+func TestLoadSemanticFragmentFileRejectsInvalidConfigurationAndArtifacts(t *testing.T) {
+	directory := t.TempDir()
+	configurationPath := filepath.Join(directory, "provider.yaml")
+	validPath := filepath.Join(directory, "valid.json")
+	if err := os.WriteFile(validPath, []byte("{}\n"), 0o600); err != nil {
+		t.Fatalf("os.WriteFile(valid) error = %v", err)
+	}
+	oversizedPath := filepath.Join(directory, "oversized.json")
+	if err := os.WriteFile(
+		oversizedPath,
+		bytes.Repeat([]byte("a"), MaxSemanticFragmentDocumentSize+1),
+		0o600,
+	); err != nil {
+		t.Fatalf("os.WriteFile(oversized) error = %v", err)
+	}
+
+	tests := []struct {
+		name   string
+		config SemanticFragmentFileConfig
+		want   string
+	}{
+		{
+			name: "missing file",
+			config: SemanticFragmentFileConfig{
+				MediaType: SemanticFragmentMediaTypeJSON,
+				Version:   "fixture-v1",
+			},
+			want: "semantic fragment file is required",
+		},
+		{
+			name: "remote URL",
+			config: SemanticFragmentFileConfig{
+				FragmentFile: "https://example.test/semantic.json",
+				MediaType:    SemanticFragmentMediaTypeJSON,
+				Version:      "fixture-v1",
+			},
+			want: "semantic fragment URLs are not supported",
+		},
+		{
+			name: "missing media type",
+			config: SemanticFragmentFileConfig{
+				FragmentFile: "valid.json",
+				Version:      "fixture-v1",
+			},
+			want: "unsupported semantic fragment media type",
+		},
+		{
+			name: "missing version",
+			config: SemanticFragmentFileConfig{
+				FragmentFile: "valid.json",
+				MediaType:    SemanticFragmentMediaTypeJSON,
+			},
+			want: "empty semantic fragment version",
+		},
+		{
+			name: "oversized document",
+			config: SemanticFragmentFileConfig{
+				FragmentFile: "oversized.json",
+				MediaType:    SemanticFragmentMediaTypeJSON,
+				Version:      "fixture-v1",
+			},
+			want: "larger than 1048576 bytes",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fragment, err := LoadSemanticFragmentFile(configurationPath, test.config)
+			if fragment != nil {
+				t.Fatalf("LoadSemanticFragmentFile() fragment = %#v, want nil", fragment)
+			}
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("LoadSemanticFragmentFile() error = %v, want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestCloneSemanticFragmentCopiesDocument(t *testing.T) {
+	original := &SemanticFragment{
+		Document:  []byte("{}\n"),
+		MediaType: SemanticFragmentMediaTypeJSON,
+		Version:   "fixture-v1",
+	}
+	cloned := CloneSemanticFragment(original)
+	cloned.Document[0] = '['
+
+	if bytes.Equal(cloned.Document, original.Document) {
+		t.Fatal("CloneSemanticFragment() retained the original document storage")
+	}
+	if CloneSemanticFragment(nil) != nil {
+		t.Fatal("CloneSemanticFragment(nil) != nil")
+	}
+}
 
 type serverTestSemanticFragmentProvider struct {
 	*serverTestProvider

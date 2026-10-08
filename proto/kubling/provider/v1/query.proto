@@ -66,6 +66,21 @@ message QueryRequest {
   //
   // Kubling must only set this field when the provider advertises having.
   Expression having = 11;
+
+  // True when Kubling accepts a terminal QueryOutcome response.
+  //
+  // Providers must not emit QueryOutcome when this field is false. When true,
+  // the provider must emit exactly one outcome after all tuple batches and the
+  // RPC must also finish with an OK status for the query to be successful.
+  bool accept_outcome = 12;
+
+  // True when Kubling permits valid rows to be returned with an explicitly
+  // incomplete outcome.
+  //
+  // This requires accept_outcome and may only be requested when the provider
+  // advertises partial_results. A provider that cannot complete a strict query
+  // must fail the RPC instead of returning a partial outcome.
+  bool allow_partial_results = 13;
 }
 
 // Logical entity exposed through the Kubling model.
@@ -117,5 +132,74 @@ enum NullOrdering {
 // Streamed query result.
 message QueryResponse {
   // Batch of tuples produced by the provider.
+  //
+  // A response must contain either batch or outcome, never both. All batches
+  // must precede the terminal outcome.
   TupleBatch batch = 1;
+
+  // Terminal query outcome.
+  //
+  // This is emitted exactly once only when QueryRequest.accept_outcome is true.
+  // Receiving this message does not by itself establish success: the gRPC
+  // stream must also finish with an OK status.
+  QueryOutcome outcome = 2;
+}
+
+// Completeness of the rows returned by a provider query.
+enum QueryCompletion {
+  QUERY_COMPLETION_UNSPECIFIED = 0;
+
+  // Every source target required by the provider query was evaluated.
+  QUERY_COMPLETION_COMPLETE = 1;
+
+  // Returned rows are valid, but at least one required source target could not
+  // be evaluated. At least one diagnostic must identify itself as a partial
+  // result cause and explain the incompleteness.
+  QUERY_COMPLETION_PARTIAL = 2;
+}
+
+// Relationship between a query diagnostic and the returned result.
+enum QueryDiagnosticRole {
+  QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED = 0;
+
+  // The diagnostic does not affect result completeness.
+  QUERY_DIAGNOSTIC_ROLE_WARNING = 1;
+
+  // The diagnostic explains why the returned result is incomplete.
+  QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE = 2;
+}
+
+// Terminal metadata for a provider query.
+message QueryOutcome {
+  // Whether the returned rows are complete.
+  QueryCompletion completion = 1;
+
+  // Non-fatal diagnostics observed while producing the result.
+  //
+  // A COMPLETE outcome may contain warnings, but it must not contain a partial
+  // result cause. A PARTIAL outcome must contain at least one partial result
+  // cause and may also contain unrelated warnings.
+  repeated QueryWarning warnings = 2;
+}
+
+// Non-fatal provider query diagnostic.
+message QueryWarning {
+  // Optional stable provider-defined identifier suitable for automation.
+  string code = 1;
+
+  // Human-readable explanation safe to expose to the Kubling client.
+  string message = 2;
+
+  // Optional provider-defined logical identifier for the affected target.
+  //
+  // This must not contain credentials, secret material or an endpoint URI with
+  // embedded credentials.
+  string target = 3;
+
+  // True when retrying the affected target may succeed without configuration
+  // or query changes.
+  bool retryable = 4;
+
+  // Required relationship between this diagnostic and result completeness.
+  QueryDiagnosticRole role = 5;
 }

@@ -542,9 +542,19 @@ type TableMetadata struct {
 	//
 	// Providers may leave this unset. Kubling may add synthetic tables while
 	// composing the final logical schema without involving provider execution.
-	Synthetic     *SyntheticTableMetadata `protobuf:"bytes,10,opt,name=synthetic,proto3" json:"synthetic,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Synthetic *SyntheticTableMetadata `protobuf:"bytes,10,opt,name=synthetic,proto3" json:"synthetic,omitempty"`
+	// Alternative predicate requirements for accessing this table.
+	//
+	// At least one declared pattern must be satisfied before Kubling accesses
+	// the table. Every column inside the selected pattern is required. A pattern
+	// may be satisfied by explicit query criteria or by values supplied through
+	// a dependent join. An empty list means that unrestricted access is allowed.
+	//
+	// Access patterns describe source access constraints. They do not imply
+	// uniqueness, row identity or an index.
+	AccessPatterns []*AccessPatternMetadata `protobuf:"bytes,11,rep,name=access_patterns,json=accessPatterns,proto3" json:"access_patterns,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *TableMetadata) Reset() {
@@ -647,6 +657,80 @@ func (x *TableMetadata) GetSynthetic() *SyntheticTableMetadata {
 	return nil
 }
 
+func (x *TableMetadata) GetAccessPatterns() []*AccessPatternMetadata {
+	if x != nil {
+		return x.AccessPatterns
+	}
+	return nil
+}
+
+// One alternative set of columns required to access a table.
+type AccessPatternMetadata struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Non-empty name unique among the table's access patterns.
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// One or more unique logical names from the containing table's columns.
+	// Every listed column is required.
+	Columns []string `protobuf:"bytes,2,rep,name=columns,proto3" json:"columns,omitempty"`
+	// Provider-defined access-pattern properties.
+	//
+	// Property values must not contain credentials or other secrets.
+	Properties    map[string]string `protobuf:"bytes,3,rep,name=properties,proto3" json:"properties,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AccessPatternMetadata) Reset() {
+	*x = AccessPatternMetadata{}
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AccessPatternMetadata) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AccessPatternMetadata) ProtoMessage() {}
+
+func (x *AccessPatternMetadata) ProtoReflect() protoreflect.Message {
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AccessPatternMetadata.ProtoReflect.Descriptor instead.
+func (*AccessPatternMetadata) Descriptor() ([]byte, []int) {
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *AccessPatternMetadata) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AccessPatternMetadata) GetColumns() []string {
+	if x != nil {
+		return x.Columns
+	}
+	return nil
+}
+
+func (x *AccessPatternMetadata) GetProperties() map[string]string {
+	if x != nil {
+		return x.Properties
+	}
+	return nil
+}
+
 // Logical column exposed by a table.
 type ColumnMetadata struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -694,7 +778,7 @@ type ColumnMetadata struct {
 
 func (x *ColumnMetadata) Reset() {
 	*x = ColumnMetadata{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[3]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -706,7 +790,7 @@ func (x *ColumnMetadata) String() string {
 func (*ColumnMetadata) ProtoMessage() {}
 
 func (x *ColumnMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[3]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -719,7 +803,7 @@ func (x *ColumnMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ColumnMetadata.ProtoReflect.Descriptor instead.
 func (*ColumnMetadata) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{3}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *ColumnMetadata) GetName() string {
@@ -847,7 +931,7 @@ type StableKeyMetadata struct {
 
 func (x *StableKeyMetadata) Reset() {
 	*x = StableKeyMetadata{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[4]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -859,7 +943,7 @@ func (x *StableKeyMetadata) String() string {
 func (*StableKeyMetadata) ProtoMessage() {}
 
 func (x *StableKeyMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[4]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -872,7 +956,7 @@ func (x *StableKeyMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StableKeyMetadata.ProtoReflect.Descriptor instead.
 func (*StableKeyMetadata) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{4}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *StableKeyMetadata) GetColumns() []string {
@@ -914,7 +998,7 @@ type SyntheticTableMetadata struct {
 
 func (x *SyntheticTableMetadata) Reset() {
 	*x = SyntheticTableMetadata{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[5]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -926,7 +1010,7 @@ func (x *SyntheticTableMetadata) String() string {
 func (*SyntheticTableMetadata) ProtoMessage() {}
 
 func (x *SyntheticTableMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[5]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -939,7 +1023,7 @@ func (x *SyntheticTableMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyntheticTableMetadata.ProtoReflect.Descriptor instead.
 func (*SyntheticTableMetadata) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{5}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SyntheticTableMetadata) GetParent() *TableReference {
@@ -995,7 +1079,7 @@ type TableReference struct {
 
 func (x *TableReference) Reset() {
 	*x = TableReference{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[6]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1007,7 +1091,7 @@ func (x *TableReference) String() string {
 func (*TableReference) ProtoMessage() {}
 
 func (x *TableReference) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[6]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1020,7 +1104,7 @@ func (x *TableReference) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableReference.ProtoReflect.Descriptor instead.
 func (*TableReference) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{6}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *TableReference) GetNamespace() string {
@@ -1054,7 +1138,7 @@ type SyntheticColumnBinding struct {
 
 func (x *SyntheticColumnBinding) Reset() {
 	*x = SyntheticColumnBinding{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[7]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1066,7 +1150,7 @@ func (x *SyntheticColumnBinding) String() string {
 func (*SyntheticColumnBinding) ProtoMessage() {}
 
 func (x *SyntheticColumnBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[7]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1079,7 +1163,7 @@ func (x *SyntheticColumnBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyntheticColumnBinding.ProtoReflect.Descriptor instead.
 func (*SyntheticColumnBinding) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{7}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *SyntheticColumnBinding) GetColumn() string {
@@ -1158,7 +1242,7 @@ type DocumentColumnBinding struct {
 
 func (x *DocumentColumnBinding) Reset() {
 	*x = DocumentColumnBinding{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[8]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1170,7 +1254,7 @@ func (x *DocumentColumnBinding) String() string {
 func (*DocumentColumnBinding) ProtoMessage() {}
 
 func (x *DocumentColumnBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[8]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1183,7 +1267,7 @@ func (x *DocumentColumnBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DocumentColumnBinding.ProtoReflect.Descriptor instead.
 func (*DocumentColumnBinding) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{8}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DocumentColumnBinding) GetPath() string {
@@ -1207,7 +1291,7 @@ type ParentColumnBinding struct {
 
 func (x *ParentColumnBinding) Reset() {
 	*x = ParentColumnBinding{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[9]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1219,7 +1303,7 @@ func (x *ParentColumnBinding) String() string {
 func (*ParentColumnBinding) ProtoMessage() {}
 
 func (x *ParentColumnBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[9]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1232,7 +1316,7 @@ func (x *ParentColumnBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ParentColumnBinding.ProtoReflect.Descriptor instead.
 func (*ParentColumnBinding) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{9}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *ParentColumnBinding) GetColumn() string {
@@ -1265,7 +1349,7 @@ type OrdinalityColumnBinding struct {
 
 func (x *OrdinalityColumnBinding) Reset() {
 	*x = OrdinalityColumnBinding{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[10]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1277,7 +1361,7 @@ func (x *OrdinalityColumnBinding) String() string {
 func (*OrdinalityColumnBinding) ProtoMessage() {}
 
 func (x *OrdinalityColumnBinding) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[10]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1290,7 +1374,7 @@ func (x *OrdinalityColumnBinding) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OrdinalityColumnBinding.ProtoReflect.Descriptor instead.
 func (*OrdinalityColumnBinding) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{10}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{11}
 }
 
 // Kubling-owned mutation contract for a synthetic table.
@@ -1311,7 +1395,7 @@ type SyntheticMutationMetadata struct {
 
 func (x *SyntheticMutationMetadata) Reset() {
 	*x = SyntheticMutationMetadata{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[11]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1323,7 +1407,7 @@ func (x *SyntheticMutationMetadata) String() string {
 func (*SyntheticMutationMetadata) ProtoMessage() {}
 
 func (x *SyntheticMutationMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[11]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1336,7 +1420,7 @@ func (x *SyntheticMutationMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyntheticMutationMetadata.ProtoReflect.Descriptor instead.
 func (*SyntheticMutationMetadata) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{11}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *SyntheticMutationMetadata) GetStrategy() SyntheticMutationStrategy {
@@ -1391,7 +1475,7 @@ type KeyMetadata struct {
 
 func (x *KeyMetadata) Reset() {
 	*x = KeyMetadata{}
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[12]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1403,7 +1487,7 @@ func (x *KeyMetadata) String() string {
 func (*KeyMetadata) ProtoMessage() {}
 
 func (x *KeyMetadata) ProtoReflect() protoreflect.Message {
-	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[12]
+	mi := &file_kubling_provider_v1_metadata_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1416,7 +1500,7 @@ func (x *KeyMetadata) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use KeyMetadata.ProtoReflect.Descriptor instead.
 func (*KeyMetadata) Descriptor() ([]byte, []int) {
-	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{12}
+	return file_kubling_provider_v1_metadata_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *KeyMetadata) GetName() string {
@@ -1487,7 +1571,7 @@ const file_kubling_provider_v1_metadata_proto_rawDesc = "" +
 	"properties\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xba\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8f\x05\n" +
 	"\rTableMetadata\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\vsource_name\x18\x02 \x01(\tR\n" +
@@ -1504,12 +1588,22 @@ const file_kubling_provider_v1_metadata_proto_rawDesc = "" +
 	"properties\x12\x1c\n" +
 	"\tnamespace\x18\t \x01(\tR\tnamespace\x12I\n" +
 	"\tsynthetic\x18\n" +
-	" \x01(\v2+.kubling.provider.v1.SyntheticTableMetadataR\tsynthetic\x1a=\n" +
+	" \x01(\v2+.kubling.provider.v1.SyntheticTableMetadataR\tsynthetic\x12S\n" +
+	"\x0faccess_patterns\x18\v \x03(\v2*.kubling.provider.v1.AccessPatternMetadataR\x0eaccessPatterns\x1a=\n" +
 	"\x0fPropertiesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01B\f\n" +
 	"\n" +
-	"_updatable\"\xf2\x06\n" +
+	"_updatable\"\xe0\x01\n" +
+	"\x15AccessPatternMetadata\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acolumns\x18\x02 \x03(\tR\acolumns\x12Z\n" +
+	"\n" +
+	"properties\x18\x03 \x03(\v2:.kubling.provider.v1.AccessPatternMetadata.PropertiesEntryR\n" +
+	"properties\x1a=\n" +
+	"\x0fPropertiesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf2\x06\n" +
 	"\x0eColumnMetadata\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1f\n" +
 	"\vsource_name\x18\x02 \x01(\tR\n" +
@@ -1645,7 +1739,7 @@ func file_kubling_provider_v1_metadata_proto_rawDescGZIP() []byte {
 }
 
 var file_kubling_provider_v1_metadata_proto_enumTypes = make([]protoimpl.EnumInfo, 7)
-var file_kubling_provider_v1_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 18)
+var file_kubling_provider_v1_metadata_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_kubling_provider_v1_metadata_proto_goTypes = []any{
 	(TableKind)(0),                    // 0: kubling.provider.v1.TableKind
 	(KeyKind)(0),                      // 1: kubling.provider.v1.KeyKind
@@ -1657,56 +1751,60 @@ var file_kubling_provider_v1_metadata_proto_goTypes = []any{
 	(*SchemaMetadata)(nil),            // 7: kubling.provider.v1.SchemaMetadata
 	(*NamespaceMetadata)(nil),         // 8: kubling.provider.v1.NamespaceMetadata
 	(*TableMetadata)(nil),             // 9: kubling.provider.v1.TableMetadata
-	(*ColumnMetadata)(nil),            // 10: kubling.provider.v1.ColumnMetadata
-	(*StableKeyMetadata)(nil),         // 11: kubling.provider.v1.StableKeyMetadata
-	(*SyntheticTableMetadata)(nil),    // 12: kubling.provider.v1.SyntheticTableMetadata
-	(*TableReference)(nil),            // 13: kubling.provider.v1.TableReference
-	(*SyntheticColumnBinding)(nil),    // 14: kubling.provider.v1.SyntheticColumnBinding
-	(*DocumentColumnBinding)(nil),     // 15: kubling.provider.v1.DocumentColumnBinding
-	(*ParentColumnBinding)(nil),       // 16: kubling.provider.v1.ParentColumnBinding
-	(*OrdinalityColumnBinding)(nil),   // 17: kubling.provider.v1.OrdinalityColumnBinding
-	(*SyntheticMutationMetadata)(nil), // 18: kubling.provider.v1.SyntheticMutationMetadata
-	(*KeyMetadata)(nil),               // 19: kubling.provider.v1.KeyMetadata
-	nil,                               // 20: kubling.provider.v1.SchemaMetadata.PropertiesEntry
-	nil,                               // 21: kubling.provider.v1.NamespaceMetadata.PropertiesEntry
-	nil,                               // 22: kubling.provider.v1.TableMetadata.PropertiesEntry
-	nil,                               // 23: kubling.provider.v1.ColumnMetadata.PropertiesEntry
-	nil,                               // 24: kubling.provider.v1.KeyMetadata.PropertiesEntry
-	(v1.ValueType)(0),                 // 25: kubling.v1.ValueType
-	(*v1.TypeDescriptor)(nil),         // 26: kubling.v1.TypeDescriptor
+	(*AccessPatternMetadata)(nil),     // 10: kubling.provider.v1.AccessPatternMetadata
+	(*ColumnMetadata)(nil),            // 11: kubling.provider.v1.ColumnMetadata
+	(*StableKeyMetadata)(nil),         // 12: kubling.provider.v1.StableKeyMetadata
+	(*SyntheticTableMetadata)(nil),    // 13: kubling.provider.v1.SyntheticTableMetadata
+	(*TableReference)(nil),            // 14: kubling.provider.v1.TableReference
+	(*SyntheticColumnBinding)(nil),    // 15: kubling.provider.v1.SyntheticColumnBinding
+	(*DocumentColumnBinding)(nil),     // 16: kubling.provider.v1.DocumentColumnBinding
+	(*ParentColumnBinding)(nil),       // 17: kubling.provider.v1.ParentColumnBinding
+	(*OrdinalityColumnBinding)(nil),   // 18: kubling.provider.v1.OrdinalityColumnBinding
+	(*SyntheticMutationMetadata)(nil), // 19: kubling.provider.v1.SyntheticMutationMetadata
+	(*KeyMetadata)(nil),               // 20: kubling.provider.v1.KeyMetadata
+	nil,                               // 21: kubling.provider.v1.SchemaMetadata.PropertiesEntry
+	nil,                               // 22: kubling.provider.v1.NamespaceMetadata.PropertiesEntry
+	nil,                               // 23: kubling.provider.v1.TableMetadata.PropertiesEntry
+	nil,                               // 24: kubling.provider.v1.AccessPatternMetadata.PropertiesEntry
+	nil,                               // 25: kubling.provider.v1.ColumnMetadata.PropertiesEntry
+	nil,                               // 26: kubling.provider.v1.KeyMetadata.PropertiesEntry
+	(v1.ValueType)(0),                 // 27: kubling.v1.ValueType
+	(*v1.TypeDescriptor)(nil),         // 28: kubling.v1.TypeDescriptor
 }
 var file_kubling_provider_v1_metadata_proto_depIdxs = []int32{
 	9,  // 0: kubling.provider.v1.SchemaMetadata.tables:type_name -> kubling.provider.v1.TableMetadata
-	20, // 1: kubling.provider.v1.SchemaMetadata.properties:type_name -> kubling.provider.v1.SchemaMetadata.PropertiesEntry
+	21, // 1: kubling.provider.v1.SchemaMetadata.properties:type_name -> kubling.provider.v1.SchemaMetadata.PropertiesEntry
 	8,  // 2: kubling.provider.v1.SchemaMetadata.namespaces:type_name -> kubling.provider.v1.NamespaceMetadata
-	21, // 3: kubling.provider.v1.NamespaceMetadata.properties:type_name -> kubling.provider.v1.NamespaceMetadata.PropertiesEntry
+	22, // 3: kubling.provider.v1.NamespaceMetadata.properties:type_name -> kubling.provider.v1.NamespaceMetadata.PropertiesEntry
 	0,  // 4: kubling.provider.v1.TableMetadata.kind:type_name -> kubling.provider.v1.TableKind
-	10, // 5: kubling.provider.v1.TableMetadata.columns:type_name -> kubling.provider.v1.ColumnMetadata
-	19, // 6: kubling.provider.v1.TableMetadata.keys:type_name -> kubling.provider.v1.KeyMetadata
-	22, // 7: kubling.provider.v1.TableMetadata.properties:type_name -> kubling.provider.v1.TableMetadata.PropertiesEntry
-	12, // 8: kubling.provider.v1.TableMetadata.synthetic:type_name -> kubling.provider.v1.SyntheticTableMetadata
-	25, // 9: kubling.provider.v1.ColumnMetadata.type:type_name -> kubling.v1.ValueType
-	2,  // 10: kubling.provider.v1.ColumnMetadata.searchability:type_name -> kubling.provider.v1.ColumnSearchability
-	23, // 11: kubling.provider.v1.ColumnMetadata.properties:type_name -> kubling.provider.v1.ColumnMetadata.PropertiesEntry
-	11, // 12: kubling.provider.v1.ColumnMetadata.stable_key:type_name -> kubling.provider.v1.StableKeyMetadata
-	26, // 13: kubling.provider.v1.ColumnMetadata.type_descriptor:type_name -> kubling.v1.TypeDescriptor
-	3,  // 14: kubling.provider.v1.StableKeyMetadata.format:type_name -> kubling.provider.v1.StableKeyFormat
-	13, // 15: kubling.provider.v1.SyntheticTableMetadata.parent:type_name -> kubling.provider.v1.TableReference
-	4,  // 16: kubling.provider.v1.SyntheticTableMetadata.cardinality:type_name -> kubling.provider.v1.SyntheticCardinality
-	14, // 17: kubling.provider.v1.SyntheticTableMetadata.column_bindings:type_name -> kubling.provider.v1.SyntheticColumnBinding
-	18, // 18: kubling.provider.v1.SyntheticTableMetadata.mutations:type_name -> kubling.provider.v1.SyntheticMutationMetadata
-	15, // 19: kubling.provider.v1.SyntheticColumnBinding.document:type_name -> kubling.provider.v1.DocumentColumnBinding
-	16, // 20: kubling.provider.v1.SyntheticColumnBinding.parent:type_name -> kubling.provider.v1.ParentColumnBinding
-	17, // 21: kubling.provider.v1.SyntheticColumnBinding.ordinality:type_name -> kubling.provider.v1.OrdinalityColumnBinding
-	5,  // 22: kubling.provider.v1.ParentColumnBinding.scope:type_name -> kubling.provider.v1.ParentColumnScope
-	6,  // 23: kubling.provider.v1.SyntheticMutationMetadata.strategy:type_name -> kubling.provider.v1.SyntheticMutationStrategy
-	1,  // 24: kubling.provider.v1.KeyMetadata.kind:type_name -> kubling.provider.v1.KeyKind
-	24, // 25: kubling.provider.v1.KeyMetadata.properties:type_name -> kubling.provider.v1.KeyMetadata.PropertiesEntry
-	26, // [26:26] is the sub-list for method output_type
-	26, // [26:26] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	11, // 5: kubling.provider.v1.TableMetadata.columns:type_name -> kubling.provider.v1.ColumnMetadata
+	20, // 6: kubling.provider.v1.TableMetadata.keys:type_name -> kubling.provider.v1.KeyMetadata
+	23, // 7: kubling.provider.v1.TableMetadata.properties:type_name -> kubling.provider.v1.TableMetadata.PropertiesEntry
+	13, // 8: kubling.provider.v1.TableMetadata.synthetic:type_name -> kubling.provider.v1.SyntheticTableMetadata
+	10, // 9: kubling.provider.v1.TableMetadata.access_patterns:type_name -> kubling.provider.v1.AccessPatternMetadata
+	24, // 10: kubling.provider.v1.AccessPatternMetadata.properties:type_name -> kubling.provider.v1.AccessPatternMetadata.PropertiesEntry
+	27, // 11: kubling.provider.v1.ColumnMetadata.type:type_name -> kubling.v1.ValueType
+	2,  // 12: kubling.provider.v1.ColumnMetadata.searchability:type_name -> kubling.provider.v1.ColumnSearchability
+	25, // 13: kubling.provider.v1.ColumnMetadata.properties:type_name -> kubling.provider.v1.ColumnMetadata.PropertiesEntry
+	12, // 14: kubling.provider.v1.ColumnMetadata.stable_key:type_name -> kubling.provider.v1.StableKeyMetadata
+	28, // 15: kubling.provider.v1.ColumnMetadata.type_descriptor:type_name -> kubling.v1.TypeDescriptor
+	3,  // 16: kubling.provider.v1.StableKeyMetadata.format:type_name -> kubling.provider.v1.StableKeyFormat
+	14, // 17: kubling.provider.v1.SyntheticTableMetadata.parent:type_name -> kubling.provider.v1.TableReference
+	4,  // 18: kubling.provider.v1.SyntheticTableMetadata.cardinality:type_name -> kubling.provider.v1.SyntheticCardinality
+	15, // 19: kubling.provider.v1.SyntheticTableMetadata.column_bindings:type_name -> kubling.provider.v1.SyntheticColumnBinding
+	19, // 20: kubling.provider.v1.SyntheticTableMetadata.mutations:type_name -> kubling.provider.v1.SyntheticMutationMetadata
+	16, // 21: kubling.provider.v1.SyntheticColumnBinding.document:type_name -> kubling.provider.v1.DocumentColumnBinding
+	17, // 22: kubling.provider.v1.SyntheticColumnBinding.parent:type_name -> kubling.provider.v1.ParentColumnBinding
+	18, // 23: kubling.provider.v1.SyntheticColumnBinding.ordinality:type_name -> kubling.provider.v1.OrdinalityColumnBinding
+	5,  // 24: kubling.provider.v1.ParentColumnBinding.scope:type_name -> kubling.provider.v1.ParentColumnScope
+	6,  // 25: kubling.provider.v1.SyntheticMutationMetadata.strategy:type_name -> kubling.provider.v1.SyntheticMutationStrategy
+	1,  // 26: kubling.provider.v1.KeyMetadata.kind:type_name -> kubling.provider.v1.KeyKind
+	26, // 27: kubling.provider.v1.KeyMetadata.properties:type_name -> kubling.provider.v1.KeyMetadata.PropertiesEntry
+	28, // [28:28] is the sub-list for method output_type
+	28, // [28:28] is the sub-list for method input_type
+	28, // [28:28] is the sub-list for extension type_name
+	28, // [28:28] is the sub-list for extension extendee
+	0,  // [0:28] is the sub-list for field type_name
 }
 
 func init() { file_kubling_provider_v1_metadata_proto_init() }
@@ -1715,20 +1813,20 @@ func file_kubling_provider_v1_metadata_proto_init() {
 		return
 	}
 	file_kubling_provider_v1_metadata_proto_msgTypes[2].OneofWrappers = []any{}
-	file_kubling_provider_v1_metadata_proto_msgTypes[3].OneofWrappers = []any{}
-	file_kubling_provider_v1_metadata_proto_msgTypes[7].OneofWrappers = []any{
+	file_kubling_provider_v1_metadata_proto_msgTypes[4].OneofWrappers = []any{}
+	file_kubling_provider_v1_metadata_proto_msgTypes[8].OneofWrappers = []any{
 		(*SyntheticColumnBinding_Document)(nil),
 		(*SyntheticColumnBinding_Parent)(nil),
 		(*SyntheticColumnBinding_Ordinality)(nil),
 	}
-	file_kubling_provider_v1_metadata_proto_msgTypes[11].OneofWrappers = []any{}
+	file_kubling_provider_v1_metadata_proto_msgTypes[12].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_kubling_provider_v1_metadata_proto_rawDesc), len(file_kubling_provider_v1_metadata_proto_rawDesc)),
 			NumEnums:      7,
-			NumMessages:   18,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

@@ -37,6 +37,22 @@ go run ./cmd/redis -config ./config.example.yaml -listen :50051
 
 The configuration path may also be supplied through `KUBLING_REDIS_CONFIG`.
 
+## Container image
+
+Official releases are published as `docker.io/kubling/redis-provider`. Mount
+both the provider configuration and its referenced schema:
+
+```sh
+docker run --rm \
+  --publish 50051:50051 \
+  --volume "$PWD/config.example.yaml:/etc/kubling/provider.yaml:ro" \
+  --volume "$PWD/schema.example.yaml:/etc/kubling/schema.example.yaml:ro" \
+  docker.io/kubling/redis-provider:latest
+```
+
+Pin an exact image tag in production. Redis addresses in the mounted
+configuration must be reachable from the container.
+
 ## Schema examples
 
 [`schema.example.yaml`](schema.example.yaml) demonstrates four annotated
@@ -50,6 +66,22 @@ must preserve the opaque namespace that `TableMetadata.namespace` carries in
 the structured metadata path. Kubling uses that property when sending the
 entity reference back to the provider. The example value `sample` matches the
 namespace key in `config.example.yaml`.
+
+## Semantic model
+
+A deployment may associate a source-local semantic fragment with its Redis
+schema:
+
+```yaml
+semantic:
+  fragmentFile: ./redis.semantic.yaml
+  mediaType: application/yaml
+  version: <model-version>
+```
+
+The file is resolved relative to the provider configuration and returned
+unchanged. The provider does not infer relationships from hash names, key
+prefixes or field shapes. Omitting `semantic` is valid and returns no fragment.
 
 ## Local environment
 

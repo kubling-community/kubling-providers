@@ -104,6 +104,10 @@ func TestExtendedValuesRoundTripThroughProviderMessages(t *testing.T) {
 			Type:           kublingv1.ValueType_VALUE_TYPE_ARRAY,
 			TypeDescriptor: arrayType,
 		}},
+		AccessPatterns: []*providerv1.AccessPatternMetadata{{
+			Name:    "AP_SAMPLES_NAMESPACE",
+			Columns: []string{"namespace"},
+		}},
 	}}}
 	encodedMetadata, err := proto.Marshal(metadata)
 	if err != nil {

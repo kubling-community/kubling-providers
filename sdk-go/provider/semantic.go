@@ -5,6 +5,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"unicode/utf8"
 
@@ -35,6 +38,99 @@ type SemanticFragment struct {
 	Version   string
 }
 
+// SemanticFragmentFileConfig identifies one local semantic document. Providers
+// may embed this type in their own configuration formats.
+type SemanticFragmentFileConfig struct {
+	FragmentFile string `json:"fragmentFile" yaml:"fragmentFile"`
+	MediaType    string `json:"mediaType" yaml:"mediaType"`
+	Version      string `json:"version" yaml:"version"`
+}
+
+// LoadSemanticFragmentFile loads and validates one local semantic fragment.
+// Relative fragment paths are resolved from the provider configuration file.
+// The document is kept opaque and its bytes are not normalized.
+func LoadSemanticFragmentFile(
+	providerConfigPath string,
+	config SemanticFragmentFileConfig,
+) (*SemanticFragment, error) {
+	fragmentFile := strings.TrimSpace(config.FragmentFile)
+	if fragmentFile == "" {
+		return nil, fmt.Errorf("semantic fragment file is required")
+	}
+	if strings.Contains(fragmentFile, "://") {
+		return nil, fmt.Errorf("semantic fragment URLs are not supported")
+	}
+
+	resolvedPath := fragmentFile
+	if !filepath.IsAbs(resolvedPath) {
+		resolvedPath = filepath.Join(filepath.Dir(providerConfigPath), resolvedPath)
+	}
+	file, err := os.Open(resolvedPath)
+	if err != nil {
+		return nil, fmt.Errorf("open semantic fragment file %q: %w", fragmentFile, err)
+	}
+	defer file.Close()
+
+	document, err := io.ReadAll(io.LimitReader(file, MaxSemanticFragmentDocumentSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("read semantic fragment file %q: %w", fragmentFile, err)
+	}
+	fragment := &SemanticFragment{
+		Document:  document,
+		MediaType: config.MediaType,
+		Version:   config.Version,
+	}
+	if err := ValidateSemanticFragment(fragment); err != nil {
+		return nil, fmt.Errorf("validate semantic fragment file %q: %w", fragmentFile, err)
+	}
+
+	return fragment, nil
+}
+
+// CloneSemanticFragment returns an independent copy of fragment.
+func CloneSemanticFragment(fragment *SemanticFragment) *SemanticFragment {
+	if fragment == nil {
+		return nil
+	}
+	return &SemanticFragment{
+		Document:  bytes.Clone(fragment.Document),
+		MediaType: fragment.MediaType,
+		Version:   fragment.Version,
+	}
+}
+
+// ValidateSemanticFragment validates the transport envelope without parsing
+// the opaque YAML or JSON document.
+func ValidateSemanticFragment(fragment *SemanticFragment) error {
+	if fragment == nil {
+		return fmt.Errorf("semantic fragment is required")
+	}
+	if len(fragment.Document) == 0 {
+		return fmt.Errorf("empty semantic fragment document")
+	}
+	if len(fragment.Document) > MaxSemanticFragmentDocumentSize {
+		return fmt.Errorf(
+			"semantic fragment document is larger than %d bytes",
+			MaxSemanticFragmentDocumentSize,
+		)
+	}
+	if !utf8.Valid(fragment.Document) {
+		return fmt.Errorf("semantic fragment document is not valid UTF-8")
+	}
+	if strings.TrimSpace(fragment.Version) == "" {
+		return fmt.Errorf("empty semantic fragment version")
+	}
+	switch fragment.MediaType {
+	case SemanticFragmentMediaTypeYAML, SemanticFragmentMediaTypeJSON:
+		return nil
+	default:
+		return fmt.Errorf(
+			"unsupported semantic fragment media type %q",
+			fragment.MediaType,
+		)
+	}
+}
+
 // SemanticFragmentProvider may be implemented by providers that distribute a
 // source-local semantic fragment with their implementation.
 //
@@ -62,8 +158,8 @@ func (s *Server) GetSemanticFragment(
 		return &providerv1.GetSemanticFragmentResponse{}, nil
 	}
 
-	if err := validateSemanticFragment(fragment); err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+	if err := ValidateSemanticFragment(fragment); err != nil {
+		return nil, status.Errorf(codes.Internal, "provider returned invalid semantic fragment: %v", err)
 	}
 
 	document := bytes.Clone(fragment.Document)
@@ -76,31 +172,4 @@ func (s *Server) GetSemanticFragment(
 			Digest:    fmt.Sprintf("sha256:%x", digest),
 		},
 	}, nil
-}
-
-func validateSemanticFragment(fragment *SemanticFragment) error {
-	if len(fragment.Document) == 0 {
-		return fmt.Errorf("provider returned an empty semantic fragment document")
-	}
-	if len(fragment.Document) > MaxSemanticFragmentDocumentSize {
-		return fmt.Errorf(
-			"provider returned a semantic fragment document larger than %d bytes",
-			MaxSemanticFragmentDocumentSize,
-		)
-	}
-	if !utf8.Valid(fragment.Document) {
-		return fmt.Errorf("provider returned a semantic fragment document that is not valid UTF-8")
-	}
-	if strings.TrimSpace(fragment.Version) == "" {
-		return fmt.Errorf("provider returned an empty semantic fragment version")
-	}
-	switch fragment.MediaType {
-	case SemanticFragmentMediaTypeYAML, SemanticFragmentMediaTypeJSON:
-		return nil
-	default:
-		return fmt.Errorf(
-			"provider returned unsupported semantic fragment media type %q",
-			fragment.MediaType,
-		)
-	}
 }

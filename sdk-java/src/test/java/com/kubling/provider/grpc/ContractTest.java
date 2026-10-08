@@ -98,6 +98,60 @@ class ContractTest {
   }
 
   @Test
+  void preservesQueryOutcomeContract() throws Exception {
+    QueryWarning warning = QueryWarning.newBuilder()
+        .setCode("target_unavailable")
+        .setMessage("one target could not be queried")
+        .setTarget("bmc-42")
+        .setRetryable(true)
+        .setRole(QueryDiagnosticRole.QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE)
+        .build();
+    QueryOutcome outcome = QueryOutcome.newBuilder()
+        .setCompletion(QueryCompletion.QUERY_COMPLETION_PARTIAL)
+        .addWarnings(warning)
+        .build();
+    QueryRequest request = QueryRequest.newBuilder()
+        .setAcceptOutcome(true)
+        .setAllowPartialResults(true)
+        .build();
+    QueryResponse response = QueryResponse.newBuilder()
+        .setOutcome(outcome)
+        .build();
+    QueryCapabilities capabilities = QueryCapabilities.newBuilder()
+        .setPartialResults(true)
+        .build();
+
+    QueryRequest decodedRequest = QueryRequest.parseFrom(request.toByteArray());
+    assertTrue(decodedRequest.getAcceptOutcome());
+    assertTrue(decodedRequest.getAllowPartialResults());
+
+    QueryOutcome decodedOutcome =
+        QueryResponse.parseFrom(response.toByteArray()).getOutcome();
+    assertEquals(QueryCompletion.QUERY_COMPLETION_PARTIAL,
+        decodedOutcome.getCompletion());
+    assertEquals(warning, decodedOutcome.getWarnings(0));
+    assertEquals(QueryDiagnosticRole.QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+        decodedOutcome.getWarnings(0).getRole());
+    assertTrue(QueryCapabilities.parseFrom(capabilities.toByteArray())
+        .getPartialResults());
+  }
+
+  @Test
+  void preservesTableAccessPatterns() throws Exception {
+    AccessPatternMetadata pattern = AccessPatternMetadata.newBuilder()
+        .setName("AP_PROCESSES_HOST_ID")
+        .addColumns("host_id")
+        .build();
+    TableMetadata table = TableMetadata.newBuilder()
+        .setName("PROCESSES")
+        .addAccessPatterns(pattern)
+        .build();
+
+    TableMetadata decoded = TableMetadata.parseFrom(table.toByteArray());
+    assertEquals(pattern, decoded.getAccessPatterns(0));
+  }
+
+  @Test
   void exposesProviderAndLobServiceDescriptors() {
     assertEquals(
         MethodDescriptor.MethodType.SERVER_STREAMING,

@@ -1,0 +1,48 @@
+name: kubling-host-agent
+arch: ${PACKAGE_ARCH}
+platform: linux
+version: ${PACKAGE_VERSION}
+version_schema: semver
+release: "1"
+section: admin
+priority: optional
+maintainer: Kubling contributors <kubling-community@users.noreply.github.com>
+description: Host inventory and telemetry agent for Kubling
+homepage: https://github.com/kubling-community/kubling-providers
+license: Apache-2.0
+
+contents:
+  - src: build/kubling-host-agent
+    dst: /usr/bin/kubling-host-agent
+    file_info:
+      mode: 0755
+  - src: packaging/systemd/kubling-host-agent.service
+    dst: /usr/lib/systemd/system/kubling-host-agent.service
+    file_info:
+      mode: 0644
+  - dst: /etc/kubling
+    type: dir
+    file_info:
+      mode: 0755
+  - src: agent.example.yaml
+    dst: /etc/kubling/host-agent.yaml.example
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/kubling-host-agent/README.md
+    file_info:
+      mode: 0644
+  - src: ../../LICENSE
+    dst: /usr/share/doc/kubling-host-agent/copyright
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+deb:
+  compression: xz
+  fields:
+    Bugs: https://github.com/kubling-community/kubling-providers/issues

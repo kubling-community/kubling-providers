@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -111,6 +112,15 @@ func (s *queryTestResultStream) Close() error {
 	}
 
 	return s.closeErr
+}
+
+type queryOutcomeTestResultStream struct {
+	*queryTestResultStream
+	outcome *providerv1.QueryOutcome
+}
+
+func (s *queryOutcomeTestResultStream) Outcome() *providerv1.QueryOutcome {
+	return s.outcome
 }
 
 func TestServerQueryStreamsBatches(t *testing.T) {
@@ -242,6 +252,377 @@ func TestServerQueryStreamsBatches(t *testing.T) {
 	assertQueryConnectionReleased(t, server, connectionID)
 }
 
+func TestServerQueryEmitsAcceptedCompleteOutcome(t *testing.T) {
+	resultStream := &queryTestResultStream{}
+	connection := &queryTestConnection{
+		queryFunc: func(
+			context.Context,
+			*providerv1.QueryRequest,
+		) (ResultStream, error) {
+			return resultStream, nil
+		},
+	}
+	server := NewServer(&serverTestProvider{})
+	connectionID := addServerTestConnection(t, server, connection)
+	request := newQueryTestRequest(connectionID)
+	request.AcceptOutcome = true
+	serverStream := &queryTestServerStream{ctx: context.Background()}
+
+	if err := server.Query(request, serverStream); err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	if len(serverStream.responses) != 1 {
+		t.Fatalf(
+			"sent response count = %d, want 1",
+			len(serverStream.responses),
+		)
+	}
+	response := serverStream.responses[0]
+	if response.GetBatch() != nil {
+		t.Fatalf("terminal response batch = %v, want nil", response.GetBatch())
+	}
+	if got := response.GetOutcome().GetCompletion(); got !=
+		providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE {
+		t.Fatalf("completion = %s, want COMPLETE", got)
+	}
+	if len(response.GetOutcome().GetWarnings()) != 0 {
+		t.Fatalf(
+			"warnings = %v, want none",
+			response.GetOutcome().GetWarnings(),
+		)
+	}
+}
+
+func TestServerQueryEmitsExplicitOutcomes(t *testing.T) {
+	tests := []struct {
+		name    string
+		allow   bool
+		batch   *providerv1.TupleBatch
+		outcome *providerv1.QueryOutcome
+	}{
+		{
+			name: "complete with warning",
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings: []*providerv1.QueryWarning{
+					{
+						Code:    "sensor_stale",
+						Message: "one sensor returned a stale reading",
+						Target:  "rack-7",
+						Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING,
+					},
+				},
+			},
+		},
+		{
+			name:  "partial with cause and unrelated warning",
+			allow: true,
+			batch: &providerv1.TupleBatch{
+				Fields: []*providerv1.Field{
+					{
+						Name: "temperature",
+						Type: kublingv1.ValueType_VALUE_TYPE_LONG,
+					},
+				},
+				Tuples: []*providerv1.Tuple{
+					{Values: []*kublingv1.Value{{
+						Kind: &kublingv1.Value_LongValue{LongValue: 42},
+					}}},
+				},
+			},
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL,
+				Warnings: []*providerv1.QueryWarning{
+					{
+						Code:      "target_unavailable",
+						Message:   "one target could not be queried",
+						Target:    "bmc-42",
+						Retryable: true,
+						Role:      providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+					},
+					{
+						Code:    "firmware_deprecated",
+						Message: "one target runs deprecated firmware",
+						Target:  "bmc-7",
+						Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			nextResults := []queryNextResult(nil)
+			if test.batch != nil {
+				nextResults = append(nextResults, queryNextResult{batch: test.batch})
+			}
+			resultStream := &queryOutcomeTestResultStream{
+				queryTestResultStream: &queryTestResultStream{
+					nextResults: nextResults,
+				},
+				outcome: test.outcome,
+			}
+			connection := &queryTestConnection{
+				queryFunc: func(
+					_ context.Context,
+					request *providerv1.QueryRequest,
+				) (ResultStream, error) {
+					if !request.GetAcceptOutcome() {
+						t.Fatal("connection received accept_outcome=false")
+					}
+					if got := request.GetAllowPartialResults(); got != test.allow {
+						t.Fatalf(
+							"connection received allow_partial_results=%t, want %t",
+							got,
+							test.allow,
+						)
+					}
+					return resultStream, nil
+				},
+			}
+			server := NewServer(&serverTestProvider{})
+			connectionID := addServerTestConnection(t, server, connection)
+			request := newQueryTestRequest(connectionID)
+			request.AcceptOutcome = true
+			request.AllowPartialResults = test.allow
+			serverStream := &queryTestServerStream{
+				ctx: context.Background(),
+			}
+
+			if err := server.Query(request, serverStream); err != nil {
+				t.Fatalf("Query: %v", err)
+			}
+			wantResponses := 1
+			if test.batch != nil {
+				wantResponses++
+			}
+			if len(serverStream.responses) != wantResponses {
+				t.Fatalf(
+					"sent response count = %d, want %d",
+					len(serverStream.responses),
+					wantResponses,
+				)
+			}
+			if test.batch != nil && !proto.Equal(
+				serverStream.responses[0].GetBatch(),
+				test.batch,
+			) {
+				t.Fatalf(
+					"batch = %v, want %v",
+					serverStream.responses[0].GetBatch(),
+					test.batch,
+				)
+			}
+			got := serverStream.responses[len(serverStream.responses)-1].GetOutcome()
+			if !proto.Equal(got, test.outcome) {
+				t.Fatalf("outcome = %v, want %v", got, test.outcome)
+			}
+			if got == test.outcome {
+				t.Fatal("server sent provider-owned outcome pointer")
+			}
+		})
+	}
+}
+
+func TestServerQueryRequiresOutcomeAcceptanceForPartialResults(t *testing.T) {
+	queryCalls := 0
+	connection := &queryTestConnection{
+		queryFunc: func(
+			context.Context,
+			*providerv1.QueryRequest,
+		) (ResultStream, error) {
+			queryCalls++
+			return &queryTestResultStream{}, nil
+		},
+	}
+	server := NewServer(&serverTestProvider{})
+	connectionID := addServerTestConnection(t, server, connection)
+	request := newQueryTestRequest(connectionID)
+	request.AllowPartialResults = true
+
+	err := server.Query(
+		request,
+		&queryTestServerStream{ctx: context.Background()},
+	)
+	if got := status.Code(err); got != codes.InvalidArgument {
+		t.Fatalf("Query status = %s, want %s", got, codes.InvalidArgument)
+	}
+	if queryCalls != 0 {
+		t.Fatalf("connection Query call count = %d, want 0", queryCalls)
+	}
+}
+
+func TestServerQueryRejectsInvalidProviderOutcomes(t *testing.T) {
+	warning := &providerv1.QueryWarning{
+		Message: "one target failed",
+		Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING,
+	}
+	partialResultCause := &providerv1.QueryWarning{
+		Message: "one target failed",
+		Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+	}
+	tests := []struct {
+		name        string
+		accept      bool
+		allow       bool
+		outcome     *providerv1.QueryOutcome
+		wantMessage string
+	}{
+		{
+			name:        "nil outcome",
+			accept:      true,
+			outcome:     nil,
+			wantMessage: "outcome stream returned nil",
+		},
+		{
+			name:   "unspecified completion",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_UNSPECIFIED,
+			},
+			wantMessage: "completion is QUERY_COMPLETION_UNSPECIFIED",
+		},
+		{
+			name:   "partial without warning",
+			accept: true,
+			allow:  true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL,
+			},
+			wantMessage: "partial outcome requires at least one partial-result cause",
+		},
+		{
+			name:   "partial with unrelated warning only",
+			accept: true,
+			allow:  true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL,
+				Warnings:   []*providerv1.QueryWarning{warning},
+			},
+			wantMessage: "partial outcome requires at least one partial-result cause",
+		},
+		{
+			name:   "partial in strict mode",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL,
+				Warnings:   []*providerv1.QueryWarning{partialResultCause},
+			},
+			wantMessage: "partial results were produced for a strict query",
+		},
+		{
+			name:   "complete with partial-result cause",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings:   []*providerv1.QueryWarning{partialResultCause},
+			},
+			wantMessage: "complete outcome must not contain partial-result causes",
+		},
+		{
+			name: "warning without outcome acceptance",
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings:   []*providerv1.QueryWarning{warning},
+			},
+			wantMessage: "query warnings were produced without outcome acceptance",
+		},
+		{
+			name:   "nil warning",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings:   []*providerv1.QueryWarning{nil},
+			},
+			wantMessage: "warnings[0].message is required",
+		},
+		{
+			name:   "empty warning message",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings: []*providerv1.QueryWarning{{
+					Code: "empty",
+					Role: providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING,
+				}},
+			},
+			wantMessage: "warnings[0].message is required",
+		},
+		{
+			name:   "unspecified warning role",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings: []*providerv1.QueryWarning{{
+					Message: "missing role",
+				}},
+			},
+			wantMessage: "warnings[0].role is QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED",
+		},
+		{
+			name:   "unknown warning role",
+			accept: true,
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings: []*providerv1.QueryWarning{{
+					Message: "unknown role",
+					Role:    providerv1.QueryDiagnosticRole(99),
+				}},
+			},
+			wantMessage: "warnings[0].role 99 is unknown",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			resultStream := &queryOutcomeTestResultStream{
+				queryTestResultStream: &queryTestResultStream{},
+				outcome:               test.outcome,
+			}
+			connection := &queryTestConnection{
+				queryFunc: func(
+					context.Context,
+					*providerv1.QueryRequest,
+				) (ResultStream, error) {
+					return resultStream, nil
+				},
+			}
+			server := NewServer(&serverTestProvider{})
+			connectionID := addServerTestConnection(t, server, connection)
+			request := newQueryTestRequest(connectionID)
+			request.AcceptOutcome = test.accept
+			request.AllowPartialResults = test.allow
+			serverStream := &queryTestServerStream{
+				ctx: context.Background(),
+			}
+
+			err := server.Query(request, serverStream)
+			if got := status.Code(err); got != codes.Internal {
+				t.Fatalf("Query status = %s, want %s: %v", got, codes.Internal, err)
+			}
+			if got := status.Convert(err).Message(); !strings.Contains(
+				got,
+				test.wantMessage,
+			) {
+				t.Fatalf("Query error = %q, want it to contain %q", got, test.wantMessage)
+			}
+			if len(serverStream.responses) != 0 {
+				t.Fatalf(
+					"sent response count = %d, want 0",
+					len(serverStream.responses),
+				)
+			}
+			if resultStream.closeCount != 1 {
+				t.Fatalf(
+					"result stream close count = %d, want 1",
+					resultStream.closeCount,
+				)
+			}
+		})
+	}
+}
+
 func TestServerQueryCreationFailures(t *testing.T) {
 	t.Run("propagates connection error", func(t *testing.T) {
 		queryErr := errors.New("query failed")
@@ -314,6 +695,7 @@ func TestServerQueryErrorPrecedence(t *testing.T) {
 	tests := []struct {
 		name              string
 		nextResults       []queryNextResult
+		acceptOutcome     bool
 		sendErr           error
 		closeErr          error
 		wantErr           error
@@ -337,6 +719,14 @@ func TestServerQueryErrorPrecedence(t *testing.T) {
 					batch: batch,
 				},
 			},
+			sendErr:           sendErr,
+			closeErr:          closeAfterSendErr,
+			wantErr:           sendErr,
+			wantResponseCount: 1,
+		},
+		{
+			name:              "outcome send error wins over close error",
+			acceptOutcome:     true,
 			sendErr:           sendErr,
 			closeErr:          closeAfterSendErr,
 			wantErr:           sendErr,
@@ -394,9 +784,11 @@ func TestServerQueryErrorPrecedence(t *testing.T) {
 					return test.sendErr
 				},
 			}
+			request := newQueryTestRequest(connectionID)
+			request.AcceptOutcome = test.acceptOutcome
 
 			err := server.Query(
-				newQueryTestRequest(connectionID),
+				request,
 				serverStream,
 			)
 

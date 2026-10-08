@@ -1,0 +1,12 @@
+version: v2
+
+plugins:
+  - remote: buf.build/protocolbuffers/go:v1.36.11
+    out: .
+    opt:
+      - module=github.com/kubling-community/kubling-providers/providers/host
+
+  - remote: buf.build/grpc/go:v1.5.1
+    out: .
+    opt:
+      - module=github.com/kubling-community/kubling-providers/providers/host

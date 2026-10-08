@@ -2,7 +2,9 @@ package provider
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"strings"
 
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
 	"google.golang.org/grpc/codes"
@@ -21,6 +23,12 @@ func (s *Server) Query(
 		return err
 	}
 	defer release()
+	if request.GetAllowPartialResults() && !request.GetAcceptOutcome() {
+		return status.Error(
+			codes.InvalidArgument,
+			"allow_partial_results requires accept_outcome",
+		)
+	}
 	if err := validateQueryRequestValues(request); err != nil {
 		return status.Errorf(
 			codes.InvalidArgument,
@@ -61,6 +69,24 @@ func (s *Server) Query(
 		batch, err := resultStream.Next(serverStream.Context())
 
 		if errors.Is(err, io.EOF) {
+			outcome, outcomeErr := prepareQueryOutcome(resultStream, request)
+			if outcomeErr != nil {
+				return status.Errorf(
+					codes.Internal,
+					"provider returned an invalid query outcome: %v",
+					outcomeErr,
+				)
+			}
+			if outcome == nil {
+				return nil
+			}
+			if err := serverStream.Send(
+				&providerv1.QueryResponse{
+					Outcome: outcome,
+				},
+			); err != nil {
+				return err
+			}
 			return nil
 		}
 
@@ -97,4 +123,112 @@ func (s *Server) Query(
 		}
 
 	}
+}
+
+func prepareQueryOutcome(
+	resultStream ResultStream,
+	request *providerv1.QueryRequest,
+) (*providerv1.QueryOutcome, error) {
+	outcome := &providerv1.QueryOutcome{
+		Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+	}
+	if outcomeStream, ok := resultStream.(QueryOutcomeStream); ok {
+		providerOutcome := outcomeStream.Outcome()
+		if providerOutcome == nil {
+			return nil, errors.New("outcome stream returned nil")
+		}
+		outcome = proto.Clone(providerOutcome).(*providerv1.QueryOutcome)
+	}
+
+	if err := validateQueryOutcome(outcome); err != nil {
+		return nil, err
+	}
+	if outcome.GetCompletion() ==
+		providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL &&
+		!request.GetAllowPartialResults() {
+		return nil, errors.New(
+			"partial results were produced for a strict query",
+		)
+	}
+	if !request.GetAcceptOutcome() {
+		if len(outcome.GetWarnings()) > 0 {
+			return nil, errors.New(
+				"query warnings were produced without outcome acceptance",
+			)
+		}
+		return nil, nil
+	}
+
+	return outcome, nil
+}
+
+func validateQueryOutcome(outcome *providerv1.QueryOutcome) error {
+	switch outcome.GetCompletion() {
+	case providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE:
+	case providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL:
+	case providerv1.QueryCompletion_QUERY_COMPLETION_UNSPECIFIED:
+		return errors.New("completion is QUERY_COMPLETION_UNSPECIFIED")
+	default:
+		return fmt.Errorf(
+			"completion %d is unknown",
+			outcome.GetCompletion(),
+		)
+	}
+
+	partialResultCauses := 0
+	for index, warning := range outcome.GetWarnings() {
+		if warning == nil {
+			return fmt.Errorf("warnings[%d] is nil", index)
+		}
+		if strings.TrimSpace(warning.GetMessage()) == "" {
+			return fmt.Errorf("warnings[%d].message is required", index)
+		}
+		if warning.GetCode() != "" &&
+			strings.TrimSpace(warning.GetCode()) == "" {
+			return fmt.Errorf(
+				"warnings[%d].code must not be whitespace",
+				index,
+			)
+		}
+		if warning.GetTarget() != "" &&
+			strings.TrimSpace(warning.GetTarget()) == "" {
+			return fmt.Errorf(
+				"warnings[%d].target must not be whitespace",
+				index,
+			)
+		}
+		switch warning.GetRole() {
+		case providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING:
+		case providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE:
+			partialResultCauses++
+		case providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED:
+			return fmt.Errorf(
+				"warnings[%d].role is QUERY_DIAGNOSTIC_ROLE_UNSPECIFIED",
+				index,
+			)
+		default:
+			return fmt.Errorf(
+				"warnings[%d].role %d is unknown",
+				index,
+				warning.GetRole(),
+			)
+		}
+	}
+
+	switch outcome.GetCompletion() {
+	case providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE:
+		if partialResultCauses > 0 {
+			return errors.New(
+				"complete outcome must not contain partial-result causes",
+			)
+		}
+	case providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL:
+		if partialResultCauses == 0 {
+			return errors.New(
+				"partial outcome requires at least one partial-result cause",
+			)
+		}
+	}
+
+	return nil
 }

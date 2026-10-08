@@ -1,0 +1,192 @@
+syntax = "proto3";
+
+package kubling.host.v1;
+
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "kubling/v1/value.proto";
+
+option go_package = "github.com/kubling-community/kubling-providers/providers/host/internal/gatewaypb;gatewaypb";
+
+// AgentGatewayService connects host agents to one Host Provider.
+//
+// Authentication is carried by gRPC transport credentials and metadata, not
+// by messages in this protocol. The first ConnectRequest must contain exactly
+// one AgentHello. The provider accepts the session with SessionAccepted or
+// terminates the stream with a gRPC status.
+service AgentGatewayService {
+  // Connect maintains one agent-initiated, bidirectional session.
+  rpc Connect(stream ConnectRequest) returns (stream ConnectResponse);
+}
+
+// Message sent from a host agent to the Host Provider.
+message ConnectRequest {
+  oneof payload {
+    AgentHello hello = 1;
+    Heartbeat heartbeat = 2;
+    ScanBatch scan_batch = 3;
+    ScanFinished scan_finished = 4;
+  }
+}
+
+// Message sent from the Host Provider to a connected host agent.
+message ConnectResponse {
+  oneof payload {
+    SessionAccepted session_accepted = 1;
+    HeartbeatAcknowledged heartbeat_acknowledged = 2;
+    ScanRequest scan_request = 3;
+    CancelScan cancel_scan = 4;
+  }
+}
+
+// Version of the Agent Gateway protocol implemented by a peer.
+message ProtocolVersion {
+  uint32 major = 1;
+  uint32 minor = 2;
+}
+
+// First and only handshake message sent by an agent on a new stream.
+message AgentHello {
+  // Durable random identifier generated and persisted by the agent.
+  string agent_id = 1;
+
+  // Namespace requested by agent configuration. The provider must authorize
+  // this value using transport credentials before accepting the session.
+  string requested_namespace = 2;
+
+  // Mutable observed hostname. This is descriptive and never establishes
+  // agent identity.
+  string hostname = 3;
+
+  // Informational build version of the host-agent binary.
+  string agent_version = 4;
+
+  ProtocolVersion protocol_version = 5;
+
+  // Host table schema implemented by this agent.
+  string schema_version = 6;
+
+  // Maximum number of scans the agent permits concurrently. Zero is invalid.
+  uint32 max_concurrent_scans = 7;
+
+  // Non-secret agent attributes available for inventory and policy.
+  map<string, string> attributes = 8;
+}
+
+// Successful session negotiation returned once by the provider.
+message SessionAccepted {
+  string session_id = 1;
+  uint64 generation = 2;
+  string namespace = 3;
+  string host_id = 4;
+  ProtocolVersion protocol_version = 5;
+  string schema_version = 6;
+  google.protobuf.Duration heartbeat_interval = 7;
+  google.protobuf.Duration lease_duration = 8;
+}
+
+// Renewable liveness signal sent while scans may be in flight.
+message Heartbeat {
+  // Agent-local monotonically increasing correlation number.
+  uint64 sequence = 1;
+}
+
+// Confirms that the provider renewed the session lease.
+message HeartbeatAcknowledged {
+  uint64 sequence = 1;
+  google.protobuf.Timestamp lease_expires_at = 2;
+}
+
+// Host table that an agent can observe locally.
+enum HostTable {
+  HOST_TABLE_UNSPECIFIED = 0;
+  HOST_TABLE_FACTS = 1;
+  HOST_TABLE_CPU_INFO = 2;
+  HOST_TABLE_CPU_TIMES = 3;
+  HOST_TABLE_MEMORY = 4;
+  HOST_TABLE_FILESYSTEMS = 5;
+  HOST_TABLE_NETWORK_INTERFACES = 6;
+  HOST_TABLE_NETWORK_IO = 7;
+  HOST_TABLE_PROCESSES = 8;
+}
+
+// Typed local table scan dispatched to one agent session.
+message ScanRequest {
+  // Opaque identifier unique among scans in the current session.
+  string scan_id = 1;
+
+  HostTable table = 2;
+
+  // Ordered local columns expected in every returned ScanRow. Access fields
+  // such as namespace and host_id are injected by the provider and never sent
+  // to or accepted from an agent.
+  repeated string columns = 3;
+
+  // Absolute provider deadline. The agent must stop the scan after this time
+  // even if a CancelScan message cannot be delivered.
+  google.protobuf.Timestamp deadline = 4;
+
+  // Preferred maximum rows per batch. Zero leaves the choice to the agent.
+  uint32 preferred_batch_rows = 5;
+}
+
+// Ordered batch of rows produced by one scan.
+message ScanBatch {
+  string scan_id = 1;
+
+  // Contiguous zero-based index within this scan. It permits duplicate and
+  // missing batches to be rejected without imposing ordering across agents.
+  uint64 batch_index = 2;
+
+  repeated ScanRow rows = 3;
+}
+
+// Values ordered according to ScanRequest.columns.
+message ScanRow {
+  repeated kubling.v1.Value values = 1;
+}
+
+// Terminal state of an agent scan.
+enum ScanStatus {
+  SCAN_STATUS_UNSPECIFIED = 0;
+  SCAN_STATUS_SUCCEEDED = 1;
+  SCAN_STATUS_FAILED = 2;
+  SCAN_STATUS_CANCELLED = 3;
+}
+
+// Final and unique agent message for a scan.
+message ScanFinished {
+  string scan_id = 1;
+  ScanStatus status = 2;
+
+  // SUCCEEDED may include non-fatal warnings. FAILED must include at least one
+  // diagnostic explaining the failure. The provider, rather than the agent,
+  // decides whether a failed target produces a strict or partial query result.
+  repeated ScanDiagnostic diagnostics = 3;
+}
+
+// Structured agent-side diagnostic safe to propagate to Kubling.
+message ScanDiagnostic {
+  string code = 1;
+  string message = 2;
+
+  // Optional local object identifier such as a mount point or process ID. It
+  // must never contain credentials or endpoint URIs with embedded secrets.
+  string target = 3;
+
+  bool retryable = 4;
+}
+
+// Reason that the provider no longer requires an in-flight scan.
+enum CancelReason {
+  CANCEL_REASON_UNSPECIFIED = 0;
+  CANCEL_REASON_CLIENT_CANCELLED = 1;
+  CANCEL_REASON_DEADLINE_EXCEEDED = 2;
+  CANCEL_REASON_PROVIDER_SHUTDOWN = 3;
+}
+
+// Requests cooperative cancellation of a scan.
+message CancelScan {
+  string scan_id = 1;
+  CancelReason reason = 2;
+}

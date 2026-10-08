@@ -82,6 +82,12 @@ When semantic bootstrap is enabled, the provider catalog must retain
 filter out one of these resources cannot satisfy the fragment bindings and are
 expected to fail semantic validation visibly.
 
+A broader generated model is available as an opt-in
+[`k3s semantic reference`](examples/semantic/k3s-reference/README.md). It ships
+with matching provider settings, pinned provenance and a reproducible
+generator. It remains separate from the bundled fragment because Kubernetes
+catalogs vary with distribution, release, enabled APIs, CRDs and permissions.
+
 ## Configuration
 
 The provider uses standard `client-go` kubeconfig loading when `kubeconfig` is

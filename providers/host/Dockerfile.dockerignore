@@ -1,0 +1,7 @@
+**
+!sdk-go/
+!sdk-go/**
+!providers/
+!providers/host/
+!providers/host/**
+!LICENSE

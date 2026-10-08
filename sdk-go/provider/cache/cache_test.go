@@ -39,6 +39,17 @@ func (p *testMetadataProvider) Metadata(
 	return p.metadataFunc(ctx)
 }
 
+type testSemanticProvider struct {
+	*testProvider
+	semanticFunc func(context.Context) (*providersdk.SemanticFragment, error)
+}
+
+func (p *testSemanticProvider) SemanticFragment(
+	ctx context.Context,
+) (*providersdk.SemanticFragment, error) {
+	return p.semanticFunc(ctx)
+}
+
 func (p *testProvider) Capabilities(
 	context.Context,
 ) (*providersdk.Capabilities, error) {
@@ -168,6 +179,15 @@ func (s *testStream) Close() error {
 	return s.closeErr
 }
 
+type outcomeTestStream struct {
+	*testStream
+	outcome *providerv1.QueryOutcome
+}
+
+func (s *outcomeTestStream) Outcome() *providerv1.QueryOutcome {
+	return s.outcome
+}
+
 func TestProviderSchema(t *testing.T) {
 	t.Run("delegates global schema", func(t *testing.T) {
 		const expectedSchema = "CREATE FOREIGN TABLE sample"
@@ -228,6 +248,49 @@ func TestProviderMetadata(t *testing.T) {
 	})
 }
 
+func TestProviderSemanticFragment(t *testing.T) {
+	t.Run("delegates configured fragment", func(t *testing.T) {
+		expected := &providersdk.SemanticFragment{
+			Document:  []byte("{}\n"),
+			MediaType: providersdk.SemanticFragmentMediaTypeJSON,
+			Version:   "fixture-v1",
+		}
+		ctx := context.Background()
+		cachedProvider, _ := Wrap(
+			&testSemanticProvider{
+				testProvider: &testProvider{},
+				semanticFunc: func(received context.Context) (*providersdk.SemanticFragment, error) {
+					if received != ctx {
+						t.Fatal("SemanticFragment() received a different context")
+					}
+					return expected, nil
+				},
+			},
+			Config{},
+		)
+
+		fragment, err := cachedProvider.SemanticFragment(ctx)
+		if err != nil {
+			t.Fatalf("SemanticFragment() error = %v", err)
+		}
+		if fragment != expected {
+			t.Fatalf("SemanticFragment() = %#v, want %#v", fragment, expected)
+		}
+	})
+
+	t.Run("returns nil when unsupported", func(t *testing.T) {
+		cachedProvider, _ := Wrap(&testProvider{}, Config{})
+
+		fragment, err := cachedProvider.SemanticFragment(context.Background())
+		if err != nil {
+			t.Fatalf("SemanticFragment() error = %v", err)
+		}
+		if fragment != nil {
+			t.Fatalf("SemanticFragment() = %#v, want nil", fragment)
+		}
+	})
+}
+
 func TestQueryCachesCompletedStream(t *testing.T) {
 	var queryCalls atomic.Int32
 	expected := testBatch("original")
@@ -260,6 +323,138 @@ func TestQueryCachesCompletedStream(t *testing.T) {
 	third := queryAndClose(t, cachedConnection, testQuery("transport-3", "TASK"))
 	if got := third[0].GetTuples()[0].GetValues()[0].GetStringValue(); got != "original" {
 		t.Fatalf("cached batch was mutated: value = %q", got)
+	}
+}
+
+func TestQueryCacheReplaysCompleteOutcome(t *testing.T) {
+	var queryCalls atomic.Int32
+	providerOutcome := &providerv1.QueryOutcome{
+		Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+	}
+	connection := &testConnection{
+		queryFunc: func(
+			context.Context,
+			*providerv1.QueryRequest,
+		) (providersdk.ResultStream, error) {
+			queryCalls.Add(1)
+			return &outcomeTestStream{
+				testStream: &testStream{
+					batches: []*providerv1.TupleBatch{testBatch("original")},
+				},
+				outcome: providerOutcome,
+			}, nil
+		},
+	}
+	cachedProvider, _ := Wrap(&testProvider{connection: connection}, Config{})
+	cachedConnection := openTestConnection(t, cachedProvider, "source-a")
+	request := testQuery("", "TASK")
+
+	_, firstOutcome := queryOutcomeAndClose(t, cachedConnection, request)
+	if !proto.Equal(firstOutcome, providerOutcome) {
+		t.Fatalf("first outcome = %v, want %v", firstOutcome, providerOutcome)
+	}
+	firstOutcome.Completion =
+		providerv1.QueryCompletion_QUERY_COMPLETION_UNSPECIFIED
+	providerOutcome.Completion =
+		providerv1.QueryCompletion_QUERY_COMPLETION_UNSPECIFIED
+
+	_, secondOutcome := queryOutcomeAndClose(t, cachedConnection, request)
+	if queryCalls.Load() != 1 {
+		t.Fatalf("underlying Query calls = %d, want 1", queryCalls.Load())
+	}
+	if got := secondOutcome.GetCompletion(); got !=
+		providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE {
+		t.Fatalf("cached completion = %s, want COMPLETE", got)
+	}
+}
+
+func TestQueryCacheSkipsDiagnosticOutcomes(t *testing.T) {
+	tests := []struct {
+		name    string
+		outcome *providerv1.QueryOutcome
+	}{
+		{
+			name: "complete with warning",
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_COMPLETE,
+				Warnings: []*providerv1.QueryWarning{
+					{
+						Message: "sensor reading is stale",
+						Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_WARNING,
+					},
+				},
+			},
+		},
+		{
+			name: "partial",
+			outcome: &providerv1.QueryOutcome{
+				Completion: providerv1.QueryCompletion_QUERY_COMPLETION_PARTIAL,
+				Warnings: []*providerv1.QueryWarning{
+					{
+						Message: "one target was unavailable",
+						Role:    providerv1.QueryDiagnosticRole_QUERY_DIAGNOSTIC_ROLE_PARTIAL_RESULT_CAUSE,
+					},
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			var queryCalls atomic.Int32
+			connection := &testConnection{
+				queryFunc: func(
+					context.Context,
+					*providerv1.QueryRequest,
+				) (providersdk.ResultStream, error) {
+					queryCalls.Add(1)
+					return &outcomeTestStream{
+						testStream: &testStream{
+							batches: []*providerv1.TupleBatch{
+								testBatch("value"),
+							},
+						},
+						outcome: test.outcome,
+					}, nil
+				},
+			}
+			cachedProvider, _ := Wrap(
+				&testProvider{connection: connection},
+				Config{},
+			)
+			cachedConnection := openTestConnection(
+				t,
+				cachedProvider,
+				"source-a",
+			)
+			request := testQuery("", "TASK")
+
+			_, firstOutcome := queryOutcomeAndClose(
+				t,
+				cachedConnection,
+				request,
+			)
+			_, secondOutcome := queryOutcomeAndClose(
+				t,
+				cachedConnection,
+				request,
+			)
+			if queryCalls.Load() != 2 {
+				t.Fatalf(
+					"underlying Query calls = %d, want 2",
+					queryCalls.Load(),
+				)
+			}
+			if !proto.Equal(firstOutcome, test.outcome) ||
+				!proto.Equal(secondOutcome, test.outcome) {
+				t.Fatalf(
+					"outcomes = (%v, %v), want %v",
+					firstOutcome,
+					secondOutcome,
+					test.outcome,
+				)
+			}
+		})
 	}
 }
 
@@ -891,6 +1086,44 @@ func queryAndClose(
 	}
 
 	return batches
+}
+
+func queryOutcomeAndClose(
+	t *testing.T,
+	connection providersdk.Connection,
+	request *providerv1.QueryRequest,
+) ([]*providerv1.TupleBatch, *providerv1.QueryOutcome) {
+	t.Helper()
+
+	stream, err := connection.Query(context.Background(), request)
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+
+	var batches []*providerv1.TupleBatch
+	for {
+		batch, err := stream.Next(context.Background())
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("Next() error = %v", err)
+		}
+		batches = append(batches, batch)
+	}
+	outcomeStream, ok := stream.(providersdk.QueryOutcomeStream)
+	if !ok {
+		t.Fatalf("stream type %T does not expose a query outcome", stream)
+	}
+	outcome := outcomeStream.Outcome()
+	if outcome == nil {
+		t.Fatal("Outcome() = nil")
+	}
+	if err := stream.Close(); err != nil {
+		t.Fatalf("Close() error = %v", err)
+	}
+
+	return batches, outcome
 }
 
 func testQuery(

@@ -17,8 +17,9 @@ var schemaDDL string
 
 // Provider exposes one in-memory sample data universe.
 type Provider struct {
-	store       *store
-	queryLogger *slog.Logger
+	store            *store
+	queryLogger      *slog.Logger
+	semanticFragment *providersdk.SemanticFragment
 }
 
 // Option configures an in-memory provider.
@@ -29,6 +30,15 @@ type Option func(*Provider)
 func WithQueryLogger(logger *slog.Logger) Option {
 	return func(provider *Provider) {
 		provider.queryLogger = logger
+	}
+}
+
+// WithSemanticFragment associates a semantic document with this particular
+// in-memory fixture. The provider has no universal semantic model by default.
+func WithSemanticFragment(fragment *providersdk.SemanticFragment) Option {
+	cloned := providersdk.CloneSemanticFragment(fragment)
+	return func(provider *Provider) {
+		provider.semanticFragment = cloned
 	}
 }
 
@@ -165,6 +175,7 @@ func (p *Provider) Open(
 }
 
 var (
-	_ providersdk.Provider       = (*Provider)(nil)
-	_ providersdk.SchemaProvider = (*Provider)(nil)
+	_ providersdk.Provider                 = (*Provider)(nil)
+	_ providersdk.SchemaProvider           = (*Provider)(nil)
+	_ providersdk.SemanticFragmentProvider = (*Provider)(nil)
 )
