@@ -13,6 +13,7 @@ updates:
     directories:
       - /sdk-go
       - /providers/cassandra
+      - /providers/host
       - /providers/inmemory
       - /providers/kubernetes
       - /providers/openapi

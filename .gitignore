@@ -35,6 +35,8 @@ Thumbs.db
 # Generated local integration bundles
 /testing/provider-test
 /testing/kubling/provider-test-descriptor-bundle.zip
+/providers/host/build/
+/providers/host/dist/
 
 # Generated Java and Python bindings and packages
 /sdk-java/generated/

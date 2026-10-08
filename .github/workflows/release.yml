@@ -97,7 +97,7 @@ jobs:
           git diff --exit-code -- sdk-go
       - name: Build and test all Go modules
         run: |
-          for module in sdk-go providers/cassandra providers/inmemory providers/kubernetes providers/openapi providers/redis testing; do
+          for module in sdk-go providers/cassandra providers/host providers/inmemory providers/kubernetes providers/openapi providers/redis testing; do
             (cd "${module}" && go build ./... && go vet ./... && go test -race ./...)
           done
 

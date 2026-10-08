@@ -1,0 +1,250 @@
+name: Host Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/host/v*'
+    paths:
+      - 'providers/host/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-host.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/host/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-host.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  gateway-contract:
+    name: Validate Agent Gateway contract
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Regenerate Go bindings
+        working-directory: providers/host
+        run: ./generate.sh
+
+      - name: Verify generated sources
+        run: git diff --exit-code -- providers/host
+
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: Host provider
+      module_directory: providers/host
+
+  container:
+    needs:
+      - gateway-contract
+      - validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: host
+      provider_directory: providers/host
+      image_repository: docker.io/kubling/host-provider
+      image_title: Kubling Host Provider
+      image_description: Dynamic host-fleet provider for Kubling
+    secrets: inherit
+
+  artifacts:
+    name: Build Linux artifacts
+    needs:
+      - gateway-contract
+      - validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+          cache-dependency-path: providers/host/go.sum
+
+      - name: Install nFPM
+        env:
+          GOBIN: ${{ runner.temp }}/bin
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+
+      - name: Resolve artifact version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/providers/host/v* ]]; then
+            package_version="${GITHUB_REF_NAME#providers/host/v}"
+            artifact_version="v${package_version}"
+          else
+            package_version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+            artifact_version="dev-${GITHUB_SHA:0:12}"
+          fi
+          echo "package=${package_version}" >> "${GITHUB_OUTPUT}"
+          echo "artifact=${artifact_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build archives and Debian packages
+        shell: bash
+        env:
+          NFPM_BINARY: ${{ runner.temp }}/bin/nfpm
+          PACKAGE_VERSION: ${{ steps.version.outputs.package }}
+          ARTIFACT_VERSION: ${{ steps.version.outputs.artifact }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          export SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+
+          for arch in amd64 arm64; do
+            bundle="${RUNNER_TEMP}/kubling-host-${arch}"
+            mkdir -p "${bundle}"
+
+            (
+              cd providers/host
+              CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build \
+                -trimpath -ldflags="-s -w" \
+                -o "${bundle}/kubling-host-provider" \
+                ./cmd/kubling-host-provider
+              CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" go build \
+                -trimpath -ldflags="-s -w -X main.version=v${PACKAGE_VERSION}" \
+                -o "${bundle}/kubling-host-agent" \
+                ./cmd/kubling-host-agent
+            )
+
+            cp providers/host/agent.example.yaml "${bundle}/host-agent.example.yaml"
+            cp providers/host/packaging/systemd/kubling-host-agent.service "${bundle}/"
+            cp providers/host/README.md LICENSE "${bundle}/"
+            tar -C "${bundle}" -czf \
+              "dist/kubling-host-${ARTIFACT_VERSION}-linux-${arch}.tar.gz" .
+
+            providers/host/packaging/build-deb.sh \
+              "${PACKAGE_VERSION}" "${arch}" "${GITHUB_WORKSPACE}/dist"
+          done
+
+          (cd dist && sha256sum ./*.tar.gz ./*.deb >SHA256SUMS)
+
+      - name: Verify Debian packages
+        run: |
+          set -euo pipefail
+          for package in dist/*.deb; do
+            providers/host/packaging/verify-deb.sh "${package}"
+            dpkg-deb --info "${package}"
+          done
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: host-provider-release
+          path: dist/*
+          if-no-files-found: error
+
+  publish-debian:
+    name: Publish Debian package (${{ matrix.architecture }})
+    if: startsWith(github.ref, 'refs/tags/providers/host/v')
+    needs:
+      - artifacts
+      - container
+    runs-on: ubuntu-latest
+    environment: cloudsmith
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        architecture:
+          - amd64
+          - arm64
+
+    steps:
+      - name: Validate Cloudsmith configuration
+        env:
+          CLOUDSMITH_NAMESPACE: ${{ vars.CLOUDSMITH_NAMESPACE }}
+          CLOUDSMITH_REPOSITORY: ${{ vars.CLOUDSMITH_REPOSITORY }}
+          CLOUDSMITH_API_KEY: ${{ secrets.CLOUDSMITH_API_KEY }}
+        run: |
+          set -euo pipefail
+          for name in CLOUDSMITH_NAMESPACE CLOUDSMITH_REPOSITORY CLOUDSMITH_API_KEY; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::${name} is not configured in the cloudsmith environment."
+              exit 1
+            fi
+          done
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: host-provider-release
+          path: dist
+
+      - name: Set up Cloudsmith CLI
+        uses: cloudsmith-io/cloudsmith-cli-action@69e169e2ad9bc9a1599c2dff464061a00fe9f8ba # v3
+        with:
+          api-key: ${{ secrets.CLOUDSMITH_API_KEY }}
+          verify-auth: "true"
+
+      - name: Publish package
+        env:
+          CLOUDSMITH_NAMESPACE: ${{ vars.CLOUDSMITH_NAMESPACE }}
+          CLOUDSMITH_REPOSITORY: ${{ vars.CLOUDSMITH_REPOSITORY }}
+          PACKAGE_ARCHITECTURE: ${{ matrix.architecture }}
+        run: |
+          set -euo pipefail
+          package="$(find dist -maxdepth 1 -type f \
+            -name "kubling-host-agent_*_${PACKAGE_ARCHITECTURE}.deb" \
+            -print -quit)"
+          if [[ -z "${package}" ]]; then
+            echo "::error::Debian package for ${PACKAGE_ARCHITECTURE} was not found."
+            exit 1
+          fi
+          cloudsmith push deb \
+            "${CLOUDSMITH_NAMESPACE}/${CLOUDSMITH_REPOSITORY}/any-distro/any-version" \
+            "${package}"
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/host/v')
+    needs:
+      - container
+      - artifacts
+      - publish-debian
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download release bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: host-provider-release
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Host Provider ${{ needs.container.outputs.version }}" \
+            dist/*

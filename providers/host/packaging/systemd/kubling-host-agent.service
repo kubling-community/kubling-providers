@@ -1,0 +1,32 @@
+[Unit]
+Description=Kubling Host Agent
+Documentation=https://github.com/kubling-community/kubling-providers
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+UMask=0077
+EnvironmentFile=-/etc/kubling/host-agent.env
+ExecStart=/usr/bin/kubling-host-agent --config /etc/kubling/host-agent.yaml
+Restart=on-failure
+RestartSec=5s
+StateDirectory=kubling/host-agent
+StateDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+TimeoutStopSec=20s
+
+[Install]
+WantedBy=multi-user.target
