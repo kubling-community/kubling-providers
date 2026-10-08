@@ -123,6 +123,19 @@ func (p *Provider) Metadata(
 	return metadataProvider.Metadata(ctx)
 }
 
+// SemanticFragment delegates to the wrapped provider when it exposes a
+// source-local semantic artifact.
+func (p *Provider) SemanticFragment(
+	ctx context.Context,
+) (*providersdk.SemanticFragment, error) {
+	semanticProvider, ok := p.implementation.(providersdk.SemanticFragmentProvider)
+	if !ok {
+		return nil, nil
+	}
+
+	return semanticProvider.SemanticFragment(ctx)
+}
+
 // Open delegates connection creation and wraps successful connections.
 func (p *Provider) Open(
 	ctx context.Context,
@@ -277,7 +290,8 @@ func normalizedEntityKey(entity *providerv1.EntityReference) (string, error) {
 }
 
 var (
-	_ providersdk.Provider         = (*Provider)(nil)
-	_ providersdk.SchemaProvider   = (*Provider)(nil)
-	_ providersdk.MetadataProvider = (*Provider)(nil)
+	_ providersdk.Provider                 = (*Provider)(nil)
+	_ providersdk.SchemaProvider           = (*Provider)(nil)
+	_ providersdk.MetadataProvider         = (*Provider)(nil)
+	_ providersdk.SemanticFragmentProvider = (*Provider)(nil)
 )

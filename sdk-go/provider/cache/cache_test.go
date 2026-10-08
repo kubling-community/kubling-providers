@@ -39,6 +39,17 @@ func (p *testMetadataProvider) Metadata(
 	return p.metadataFunc(ctx)
 }
 
+type testSemanticProvider struct {
+	*testProvider
+	semanticFunc func(context.Context) (*providersdk.SemanticFragment, error)
+}
+
+func (p *testSemanticProvider) SemanticFragment(
+	ctx context.Context,
+) (*providersdk.SemanticFragment, error) {
+	return p.semanticFunc(ctx)
+}
+
 func (p *testProvider) Capabilities(
 	context.Context,
 ) (*providersdk.Capabilities, error) {
@@ -233,6 +244,49 @@ func TestProviderMetadata(t *testing.T) {
 		}
 		if metadata != nil {
 			t.Fatalf("Metadata() = %v, want nil", metadata)
+		}
+	})
+}
+
+func TestProviderSemanticFragment(t *testing.T) {
+	t.Run("delegates configured fragment", func(t *testing.T) {
+		expected := &providersdk.SemanticFragment{
+			Document:  []byte("{}\n"),
+			MediaType: providersdk.SemanticFragmentMediaTypeJSON,
+			Version:   "fixture-v1",
+		}
+		ctx := context.Background()
+		cachedProvider, _ := Wrap(
+			&testSemanticProvider{
+				testProvider: &testProvider{},
+				semanticFunc: func(received context.Context) (*providersdk.SemanticFragment, error) {
+					if received != ctx {
+						t.Fatal("SemanticFragment() received a different context")
+					}
+					return expected, nil
+				},
+			},
+			Config{},
+		)
+
+		fragment, err := cachedProvider.SemanticFragment(ctx)
+		if err != nil {
+			t.Fatalf("SemanticFragment() error = %v", err)
+		}
+		if fragment != expected {
+			t.Fatalf("SemanticFragment() = %#v, want %#v", fragment, expected)
+		}
+	})
+
+	t.Run("returns nil when unsupported", func(t *testing.T) {
+		cachedProvider, _ := Wrap(&testProvider{}, Config{})
+
+		fragment, err := cachedProvider.SemanticFragment(context.Background())
+		if err != nil {
+			t.Fatalf("SemanticFragment() error = %v", err)
+		}
+		if fragment != nil {
+			t.Fatalf("SemanticFragment() = %#v, want nil", fragment)
 		}
 	})
 }
