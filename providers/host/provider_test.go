@@ -81,6 +81,8 @@ func TestProviderExposesConservativeSurface(t *testing.T) {
 	}
 	if facts := metadata.GetTables()[1]; facts.GetName() != "HOST_FACTS" {
 		t.Fatalf("Metadata() HOST_FACTS table = %v", facts)
+	} else if len(facts.GetAccessPatterns()) != 3 {
+		t.Fatalf("Metadata() HOST_FACTS access patterns = %v, want 3", facts.GetAccessPatterns())
 	}
 	if processes := metadata.GetTables()[8]; processes.GetName() != "PROCESSES" {
 		t.Fatalf("Metadata() PROCESSES table = %v", processes)
@@ -101,6 +103,27 @@ func TestProviderExposesConservativeSurface(t *testing.T) {
 	}
 	if health.GetHealthy() || !strings.Contains(health.GetMessage(), "agent API unavailable") {
 		t.Fatalf("Health() unavailable = %v", health)
+	}
+}
+
+func TestProviderMetadataReflectsUnboundedFanoutPolicy(t *testing.T) {
+	provider, err := New(
+		&fakeReadiness{},
+		&fakeQueryExecutor{},
+		Config{AllowUnboundedFanout: true},
+	)
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	for _, table := range metadata.GetTables() {
+		if len(table.GetAccessPatterns()) != 0 {
+			t.Fatalf("Metadata() table %s access patterns = %v, want none", table.GetName(), table.GetAccessPatterns())
+		}
 	}
 }
 

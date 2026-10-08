@@ -44,6 +44,41 @@ func TestMetadataDeclaresCompleteSchemaAndStableKeys(t *testing.T) {
 				t.Fatalf("table %s access field %d is not equality searchable", table.GetName(), index)
 			}
 		}
+		if table.GetName() == HostTable {
+			if len(table.GetAccessPatterns()) != 0 {
+				t.Fatalf("HOST access patterns = %v, want none", table.GetAccessPatterns())
+			}
+			continue
+		}
+		wantPatternColumns := []string{NamespaceColumn, HostIDColumn, HostnameColumn}
+		if len(table.GetAccessPatterns()) != len(wantPatternColumns) {
+			t.Fatalf(
+				"table %s access patterns = %v, want alternatives for %v",
+				table.GetName(),
+				table.GetAccessPatterns(),
+				wantPatternColumns,
+			)
+		}
+		for index, pattern := range table.GetAccessPatterns() {
+			if !reflect.DeepEqual(pattern.GetColumns(), []string{wantPatternColumns[index]}) {
+				t.Fatalf(
+					"table %s access pattern %d columns = %v, want %v",
+					table.GetName(),
+					index,
+					pattern.GetColumns(),
+					[]string{wantPatternColumns[index]},
+				)
+			}
+		}
+	}
+}
+
+func TestMetadataOmitsRoutingRequirementsWhenUnboundedFanoutIsAllowed(t *testing.T) {
+	metadata := MetadataWithOptions(MetadataOptions{AllowUnboundedFanout: true})
+	for _, table := range metadata.GetTables() {
+		if len(table.GetAccessPatterns()) != 0 {
+			t.Fatalf("table %s access patterns = %v, want none", table.GetName(), table.GetAccessPatterns())
+		}
 	}
 }
 

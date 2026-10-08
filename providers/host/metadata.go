@@ -5,6 +5,8 @@ import (
 	providersdk "github.com/kubling-community/kubling-providers/sdk-go/provider"
 )
 
-func baseMetadata() *providersdk.Metadata {
-	return hostschema.Metadata()
+func baseMetadata(config Config) *providersdk.Metadata {
+	return hostschema.MetadataWithOptions(hostschema.MetadataOptions{
+		AllowUnboundedFanout: config.AllowUnboundedFanout,
+	})
 }

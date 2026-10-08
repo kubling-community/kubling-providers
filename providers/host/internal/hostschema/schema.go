@@ -64,6 +64,12 @@ type tableDefinition struct {
 	singletonHost bool
 }
 
+// MetadataOptions controls the access constraints advertised with the stable
+// Host Provider schema.
+type MetadataOptions struct {
+	AllowUnboundedFanout bool
+}
+
 var tableDefinitions = []tableDefinition{
 	{
 		name:       HostTable,
@@ -517,11 +523,21 @@ func validateStringArray(column Column, value *kublingv1.Value) error {
 // Metadata returns the complete stable schema implemented end to end by the
 // Host Provider.
 func Metadata() *providerv1.SchemaMetadata {
+	return MetadataWithOptions(MetadataOptions{})
+}
+
+// MetadataWithOptions returns the complete stable schema and advertises the
+// routing requirements enforced by the configured provider instance.
+func MetadataWithOptions(options MetadataOptions) *providerv1.SchemaMetadata {
 	metadata := &providerv1.SchemaMetadata{
 		Tables: make([]*providerv1.TableMetadata, 0, len(tableDefinitions)),
 	}
 	for _, definition := range tableDefinitions {
 		table := metadataTable(definition)
+		if definition.gatewayTable != gatewaypb.HostTable_HOST_TABLE_UNSPECIFIED &&
+			!options.AllowUnboundedFanout {
+			table.AccessPatterns = routingAccessPatterns(definition.name)
+		}
 		providersdk.MustAddStablePrimaryKey(
 			table,
 			IdentifierColumn,
@@ -530,6 +546,18 @@ func Metadata() *providerv1.SchemaMetadata {
 		metadata.Tables = append(metadata.Tables, table)
 	}
 	return metadata
+}
+
+func routingAccessPatterns(tableName string) []*providerv1.AccessPatternMetadata {
+	columns := []string{NamespaceColumn, HostIDColumn, HostnameColumn}
+	patterns := make([]*providerv1.AccessPatternMetadata, 0, len(columns))
+	for _, column := range columns {
+		patterns = append(patterns, &providerv1.AccessPatternMetadata{
+			Name:    "AP_" + tableName + "_" + strings.ToUpper(column),
+			Columns: []string{column},
+		})
+	}
+	return patterns
 }
 
 func metadataTable(definition tableDefinition) *providerv1.TableMetadata {

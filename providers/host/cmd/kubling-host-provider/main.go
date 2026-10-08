@@ -333,7 +333,10 @@ func run(ctx context.Context, configuration config) (returnErr error) {
 	implementation, err := host.New(
 		host.ReadinessFunc(func(ctx context.Context) error { return ctx.Err() }),
 		coordinator,
-		host.Config{PartialResults: configuration.allowPartialResults},
+		host.Config{
+			PartialResults:       configuration.allowPartialResults,
+			AllowUnboundedFanout: configuration.allowUnboundedFanout,
+		},
 	)
 	if err != nil {
 		return err

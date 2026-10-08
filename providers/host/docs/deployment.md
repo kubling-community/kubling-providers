@@ -65,6 +65,11 @@ query without any of those constraints is rejected unless unbounded fan-out is
 enabled. Enabling fan-out does not remove concurrency, deadline, row or byte
 limits.
 
+When unbounded fan-out is disabled, the provider publishes the routing fields
+as alternative access patterns on every agent-backed table. This lets Kubling
+derive bounded dependent joins automatically. Enabling unbounded fan-out omits
+those hard planning constraints from the advertised metadata.
+
 Partial results are used only when the Kubling request explicitly allows them
 and the provider has enabled them. Otherwise, failure of any selected host
 fails the scan.

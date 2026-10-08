@@ -18,6 +18,11 @@ default and can be enabled explicitly when full-fleet reads are intended.
 Fan-out concurrency, scan deadlines and per-host result budgets are bounded
 and configurable by the provider process.
 
+With the default bounded policy, agent-backed tables advertise those routing
+fields as alternative access patterns. Kubling can satisfy a pattern with an
+explicit predicate or a dependent join, so fleet joins do not require users to
+add planner hints. The registry-backed `HOST` table remains unrestricted.
+
 When partial results are enabled by both Kubling and the provider, rows from
 successful hosts are retained and failed targets are returned as structured
 diagnostics. Strict requests fail if any selected host cannot complete.

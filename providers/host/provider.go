@@ -21,7 +21,8 @@ type Provider struct {
 
 // Config controls behavior advertised through the northbound provider API.
 type Config struct {
-	PartialResults bool
+	PartialResults       bool
+	AllowUnboundedFanout bool
 }
 
 // QueryExecutor supplies the Host Provider's registry and distributed-scan
@@ -103,11 +104,11 @@ func (p *Provider) Health(ctx context.Context) (*providerv1.HealthResponse, erro
 }
 
 // Metadata returns the stable root model available before agent discovery.
-func (*Provider) Metadata(ctx context.Context) (*providersdk.Metadata, error) {
+func (p *Provider) Metadata(ctx context.Context) (*providersdk.Metadata, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, status.FromContextError(err).Err()
 	}
-	return baseMetadata(), nil
+	return baseMetadata(p.config), nil
 }
 
 // Open creates a logical connection to the Host Provider.
