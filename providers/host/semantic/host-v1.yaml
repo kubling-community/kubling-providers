@@ -1,0 +1,866 @@
+# Generated from internal/hostschema; run go generate . and do not edit by hand.
+format: kubling-semantic
+schemaVersion: 1
+kind: fragment
+metadata:
+    name: host-observability
+    namespace: host
+    version: 1.0.0
+spec:
+    entities:
+        - id: Host
+          name: Host
+          description: Hosts registered with the provider
+          binding:
+            relation: HOST
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: state
+              name: State
+              type: string
+              binding:
+                field: state
+            - id: enrolledAt
+              name: Enrolled at
+              type: timestamp
+              binding:
+                field: enrolled_at
+            - id: lastSeenAt
+              name: Last seen at
+              type: timestamp
+              binding:
+                field: last_seen_at
+          identities:
+            - id: hostIdentity
+              properties:
+                - namespace
+                - hostId
+        - id: HostFacts
+          name: Host facts
+          description: Point-in-time operating system facts reported by active hosts
+          binding:
+            relation: HOST_FACTS
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: reportedHostname
+              name: Reported hostname
+              type: string
+              binding:
+                field: reported_hostname
+            - id: os
+              name: OS
+              type: string
+              binding:
+                field: os
+            - id: platform
+              name: Platform
+              type: string
+              binding:
+                field: platform
+            - id: platformFamily
+              name: Platform family
+              type: string
+              binding:
+                field: platform_family
+            - id: platformVersion
+              name: Platform version
+              type: string
+              binding:
+                field: platform_version
+            - id: kernelVersion
+              name: Kernel version
+              type: string
+              binding:
+                field: kernel_version
+            - id: kernelArchitecture
+              name: Kernel architecture
+              type: string
+              binding:
+                field: kernel_architecture
+            - id: virtualizationSystem
+              name: Virtualization system
+              type: string
+              binding:
+                field: virtualization_system
+            - id: virtualizationRole
+              name: Virtualization role
+              type: string
+              binding:
+                field: virtualization_role
+            - id: bootedAt
+              name: Booted at
+              type: timestamp
+              binding:
+                field: booted_at
+            - id: uptimeSeconds
+              name: Uptime seconds
+              type: biginteger
+              binding:
+                field: uptime_seconds
+            - id: processCount
+              name: Process count
+              type: biginteger
+              binding:
+                field: process_count
+          identities:
+            - id: hostFactsIdentity
+              properties:
+                - namespace
+                - hostId
+        - id: CPUInfo
+          name: CPU information
+          description: Logical processor facts reported by active hosts
+          binding:
+            relation: CPU_INFO
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: logicalId
+              name: Logical ID
+              type: integer
+              binding:
+                field: logical_id
+            - id: vendorId
+              name: Vendor ID
+              type: string
+              binding:
+                field: vendor_id
+            - id: family
+              name: Family
+              type: string
+              binding:
+                field: family
+            - id: model
+              name: Model
+              type: string
+              binding:
+                field: model
+            - id: stepping
+              name: Stepping
+              type: integer
+              binding:
+                field: stepping
+            - id: physicalId
+              name: Physical ID
+              type: string
+              binding:
+                field: physical_id
+            - id: coreId
+              name: Core ID
+              type: string
+              binding:
+                field: core_id
+            - id: coreCount
+              name: Core count
+              type: integer
+              binding:
+                field: core_count
+            - id: modelName
+              name: Model name
+              type: string
+              binding:
+                field: model_name
+            - id: mhz
+              name: MHz
+              type: double
+              binding:
+                field: mhz
+            - id: flags
+              name: Flags
+              type: string[]
+              binding:
+                field: flags
+            - id: microcode
+              name: Microcode
+              type: string
+              binding:
+                field: microcode
+          identities:
+            - id: cPUInfoIdentity
+              properties:
+                - namespace
+                - hostId
+                - logicalId
+        - id: CPUTimes
+          name: CPU times
+          description: Cumulative per-processor CPU counters reported by active hosts
+          binding:
+            relation: CPU_TIMES
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: cpu
+              name: CPU
+              type: string
+              binding:
+                field: cpu
+            - id: userSeconds
+              name: User seconds
+              type: double
+              binding:
+                field: user_seconds
+            - id: systemSeconds
+              name: System seconds
+              type: double
+              binding:
+                field: system_seconds
+            - id: idleSeconds
+              name: Idle seconds
+              type: double
+              binding:
+                field: idle_seconds
+            - id: niceSeconds
+              name: Nice seconds
+              type: double
+              binding:
+                field: nice_seconds
+            - id: iowaitSeconds
+              name: I/O wait seconds
+              type: double
+              binding:
+                field: iowait_seconds
+            - id: irqSeconds
+              name: IRQ seconds
+              type: double
+              binding:
+                field: irq_seconds
+            - id: softirqSeconds
+              name: Softirq seconds
+              type: double
+              binding:
+                field: softirq_seconds
+            - id: stealSeconds
+              name: Steal seconds
+              type: double
+              binding:
+                field: steal_seconds
+            - id: guestSeconds
+              name: Guest seconds
+              type: double
+              binding:
+                field: guest_seconds
+            - id: guestNiceSeconds
+              name: Guest nice seconds
+              type: double
+              binding:
+                field: guest_nice_seconds
+          identities:
+            - id: cPUTimesIdentity
+              properties:
+                - namespace
+                - hostId
+                - cpu
+        - id: Memory
+          name: Memory
+          description: Point-in-time memory state reported by active hosts
+          binding:
+            relation: MEMORY
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: totalBytes
+              name: Total bytes
+              type: biginteger
+              binding:
+                field: total_bytes
+            - id: availableBytes
+              name: Available bytes
+              type: biginteger
+              binding:
+                field: available_bytes
+            - id: usedBytes
+              name: Used bytes
+              type: biginteger
+              binding:
+                field: used_bytes
+            - id: usedPercent
+              name: Used percent
+              type: double
+              binding:
+                field: used_percent
+            - id: freeBytes
+              name: Free bytes
+              type: biginteger
+              binding:
+                field: free_bytes
+            - id: swapTotalBytes
+              name: Swap total bytes
+              type: biginteger
+              binding:
+                field: swap_total_bytes
+            - id: swapUsedBytes
+              name: Swap used bytes
+              type: biginteger
+              binding:
+                field: swap_used_bytes
+            - id: swapFreeBytes
+              name: Swap free bytes
+              type: biginteger
+              binding:
+                field: swap_free_bytes
+            - id: swapUsedPercent
+              name: Swap used percent
+              type: double
+              binding:
+                field: swap_used_percent
+            - id: swapInBytes
+              name: Swap in bytes
+              type: biginteger
+              binding:
+                field: swap_in_bytes
+            - id: swapOutBytes
+              name: Swap out bytes
+              type: biginteger
+              binding:
+                field: swap_out_bytes
+          identities:
+            - id: memoryIdentity
+              properties:
+                - namespace
+                - hostId
+        - id: Filesystem
+          name: Filesystem
+          description: Mounted filesystems and point-in-time usage reported by active hosts
+          binding:
+            relation: FILESYSTEMS
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: device
+              name: Device
+              type: string
+              binding:
+                field: device
+            - id: mountpoint
+              name: Mountpoint
+              type: string
+              binding:
+                field: mountpoint
+            - id: filesystemType
+              name: Filesystem type
+              type: string
+              binding:
+                field: filesystem_type
+            - id: options
+              name: Options
+              type: string[]
+              binding:
+                field: options
+            - id: totalBytes
+              name: Total bytes
+              type: biginteger
+              binding:
+                field: total_bytes
+            - id: freeBytes
+              name: Free bytes
+              type: biginteger
+              binding:
+                field: free_bytes
+            - id: usedBytes
+              name: Used bytes
+              type: biginteger
+              binding:
+                field: used_bytes
+            - id: usedPercent
+              name: Used percent
+              type: double
+              binding:
+                field: used_percent
+            - id: inodesTotal
+              name: Inodes total
+              type: biginteger
+              binding:
+                field: inodes_total
+            - id: inodesUsed
+              name: Inodes used
+              type: biginteger
+              binding:
+                field: inodes_used
+            - id: inodesFree
+              name: Inodes free
+              type: biginteger
+              binding:
+                field: inodes_free
+            - id: inodesUsedPercent
+              name: Inodes used percent
+              type: double
+              binding:
+                field: inodes_used_percent
+          identities:
+            - id: filesystemIdentity
+              properties:
+                - namespace
+                - hostId
+                - mountpoint
+                - device
+        - id: NetworkInterface
+          name: Network interface
+          description: Network interface inventory reported by active hosts
+          binding:
+            relation: NETWORK_INTERFACES
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: interfaceIndex
+              name: Interface index
+              type: long
+              binding:
+                field: interface_index
+            - id: name
+              name: Name
+              type: string
+              binding:
+                field: name
+            - id: mtu
+              name: MTU
+              type: long
+              binding:
+                field: mtu
+            - id: hardwareAddress
+              name: Hardware address
+              type: string
+              binding:
+                field: hardware_address
+            - id: flags
+              name: Flags
+              type: string[]
+              binding:
+                field: flags
+            - id: addresses
+              name: Addresses
+              type: string[]
+              binding:
+                field: addresses
+          identities:
+            - id: networkInterfaceIdentity
+              properties:
+                - namespace
+                - hostId
+                - name
+        - id: NetworkIO
+          name: Network I/O
+          description: Cumulative per-interface network counters reported by active hosts
+          binding:
+            relation: NETWORK_IO
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: name
+              name: Name
+              type: string
+              binding:
+                field: name
+            - id: bytesSent
+              name: Bytes sent
+              type: biginteger
+              binding:
+                field: bytes_sent
+            - id: bytesReceived
+              name: Bytes received
+              type: biginteger
+              binding:
+                field: bytes_received
+            - id: packetsSent
+              name: Packets sent
+              type: biginteger
+              binding:
+                field: packets_sent
+            - id: packetsReceived
+              name: Packets received
+              type: biginteger
+              binding:
+                field: packets_received
+            - id: errorsIn
+              name: Errors in
+              type: biginteger
+              binding:
+                field: errors_in
+            - id: errorsOut
+              name: Errors out
+              type: biginteger
+              binding:
+                field: errors_out
+            - id: dropsIn
+              name: Drops in
+              type: biginteger
+              binding:
+                field: drops_in
+            - id: dropsOut
+              name: Drops out
+              type: biginteger
+              binding:
+                field: drops_out
+            - id: fifoErrorsIn
+              name: FIFO errors in
+              type: biginteger
+              binding:
+                field: fifo_errors_in
+            - id: fifoErrorsOut
+              name: FIFO errors out
+              type: biginteger
+              binding:
+                field: fifo_errors_out
+          identities:
+            - id: networkIOIdentity
+              properties:
+                - namespace
+                - hostId
+                - name
+        - id: Process
+          name: Process
+          description: Point-in-time process inventory reported by active hosts
+          binding:
+            relation: PROCESSES
+          properties:
+            - id: namespace
+              name: Namespace
+              type: string
+              binding:
+                field: namespace
+            - id: hostId
+              name: Host ID
+              type: string
+              binding:
+                field: host_id
+            - id: hostname
+              name: Hostname
+              type: string
+              binding:
+                field: hostname
+            - id: observedAt
+              name: Observed at
+              type: timestamp
+              binding:
+                field: observed_at
+            - id: pid
+              name: PID
+              type: integer
+              binding:
+                field: pid
+            - id: createdAt
+              name: Created at
+              type: timestamp
+              binding:
+                field: created_at
+            - id: parentPid
+              name: Parent PID
+              type: integer
+              binding:
+                field: parent_pid
+            - id: name
+              name: Name
+              type: string
+              binding:
+                field: name
+            - id: executable
+              name: Executable
+              type: string
+              binding:
+                field: executable
+            - id: commandLine
+              name: Command line
+              type: string
+              binding:
+                field: command_line
+            - id: statuses
+              name: Statuses
+              type: string[]
+              binding:
+                field: statuses
+            - id: username
+              name: Username
+              type: string
+              binding:
+                field: username
+            - id: workingDirectory
+              name: Working directory
+              type: string
+              binding:
+                field: working_directory
+            - id: residentMemoryBytes
+              name: Resident memory bytes
+              type: biginteger
+              binding:
+                field: resident_memory_bytes
+            - id: virtualMemoryBytes
+              name: Virtual memory bytes
+              type: biginteger
+              binding:
+                field: virtual_memory_bytes
+            - id: threadCount
+              name: Thread count
+              type: integer
+              binding:
+                field: thread_count
+            - id: cpuUserSeconds
+              name: CPU user seconds
+              type: double
+              binding:
+                field: cpu_user_seconds
+            - id: cpuSystemSeconds
+              name: CPU system seconds
+              type: double
+              binding:
+                field: cpu_system_seconds
+          identities:
+            - id: processIdentity
+              properties:
+                - namespace
+                - hostId
+                - pid
+                - createdAt
+    relationships:
+        - id: HostHasFacts
+          name: Host has facts
+          description: A registered host has at most one current operating-system facts row.
+          from: Host
+          to: HostFacts
+          cardinality: oneToOne
+          joins:
+            - left: Host.namespace
+              right: HostFacts.namespace
+            - left: Host.hostId
+              right: HostFacts.hostId
+        - id: HostHasCPUInfo
+          name: Host has CPU information
+          description: A registered host reports its logical processor inventory.
+          from: Host
+          to: CPUInfo
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: CPUInfo.namespace
+            - left: Host.hostId
+              right: CPUInfo.hostId
+        - id: HostHasCPUTimes
+          name: Host has CPU times
+          description: A registered host reports cumulative per-processor CPU counters.
+          from: Host
+          to: CPUTimes
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: CPUTimes.namespace
+            - left: Host.hostId
+              right: CPUTimes.hostId
+        - id: HostHasMemory
+          name: Host has memory state
+          description: A registered host has at most one current memory observation.
+          from: Host
+          to: Memory
+          cardinality: oneToOne
+          joins:
+            - left: Host.namespace
+              right: Memory.namespace
+            - left: Host.hostId
+              right: Memory.hostId
+        - id: HostHasFilesystems
+          name: Host has filesystems
+          description: A registered host reports its mounted filesystems.
+          from: Host
+          to: Filesystem
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: Filesystem.namespace
+            - left: Host.hostId
+              right: Filesystem.hostId
+        - id: HostHasNetworkInterfaces
+          name: Host has network interfaces
+          description: A registered host reports its network interface inventory.
+          from: Host
+          to: NetworkInterface
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: NetworkInterface.namespace
+            - left: Host.hostId
+              right: NetworkInterface.hostId
+        - id: HostHasNetworkIO
+          name: Host has network I/O
+          description: A registered host reports cumulative network counters.
+          from: Host
+          to: NetworkIO
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: NetworkIO.namespace
+            - left: Host.hostId
+              right: NetworkIO.hostId
+        - id: HostHasProcesses
+          name: Host has processes
+          description: A registered host reports its current process inventory.
+          from: Host
+          to: Process
+          cardinality: oneToMany
+          joins:
+            - left: Host.namespace
+              right: Process.namespace
+            - left: Host.hostId
+              right: Process.hostId
+        - id: NetworkInterfaceHasIO
+          name: Network interface has I/O counters
+          description: A network interface is identified by the same host-local name as its counter row.
+          from: NetworkInterface
+          to: NetworkIO
+          cardinality: oneToOne
+          joins:
+            - left: NetworkInterface.namespace
+              right: NetworkIO.namespace
+            - left: NetworkInterface.hostId
+              right: NetworkIO.hostId
+            - left: NetworkInterface.name
+              right: NetworkIO.name
+        - id: CPUInfoCorrespondsToCPUTimes
+          name: CPU information corresponds to CPU times
+          description: Logical processor identifiers correspond to counter names by an operating-system naming convention.
+          from: CPUInfo
+          to: CPUTimes
+          cardinality: oneToOne
+        - id: ProcessHasParentProcess
+          name: Process has parent process
+          description: A process reports its parent PID, but PID reuse prevents an exact stable join without the parent's creation time.
+          from: Process
+          to: Process
+          cardinality: manyToOne
