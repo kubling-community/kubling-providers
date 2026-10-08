@@ -9,6 +9,7 @@ on:
       - 'providers/kubernetes/v*'
     paths:
       - 'providers/kubernetes/**'
+      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-kubernetes.yml'
@@ -18,6 +19,7 @@ on:
       - master
     paths:
       - 'providers/kubernetes/**'
+      - 'sdk-go/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/_provider-container.yml'
       - '.github/workflows/provider-kubernetes.yml'
@@ -26,6 +28,17 @@ permissions:
   contents: read
 
 jobs:
+  semantic-reference:
+    name: Validate semantic reference
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Verify generated k3s profile
+        run: node providers/kubernetes/examples/semantic/k3s-reference/generate.js --check
+
   validate:
     uses: ./.github/workflows/_go-module.yml
     with:
@@ -33,7 +46,9 @@ jobs:
       module_directory: providers/kubernetes
 
   container:
-    needs: validate
+    needs:
+      - semantic-reference
+      - validate
     uses: ./.github/workflows/_provider-container.yml
     with:
       provider_name: kubernetes
