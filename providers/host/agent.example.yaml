@@ -1,0 +1,8 @@
+gatewayAddress: 127.0.0.1:50052
+namespace: default
+stateDirectory: /var/lib/kubling/host-agent
+credentialFile: /run/secrets/kubling-host-agent.token
+tls:
+  caFile: /run/secrets/kubling-host-ca.pem
+  serverName: host-provider.internal
+maxConcurrentScans: 1

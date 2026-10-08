@@ -1,0 +1,15 @@
+version: v2
+
+modules:
+  - path: proto
+
+deps:
+  - buf.build/kubling/kubling-grpc
+
+lint:
+  use:
+    - STANDARD
+
+breaking:
+  use:
+    - FILE
