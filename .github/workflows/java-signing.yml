@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+env:
+  KUBLING_MAVEN_VERSION: '3.9.16'
+  KUBLING_MAVEN_DISTRIBUTION_SHA256: '5af3b743dd8b876b5c45da33b676251e5f1687712644abb4ee519ca56e1d89ce'
+
 concurrency:
   group: provider-java-signing-${{ github.ref }}
   cancel-in-progress: false
@@ -25,6 +29,16 @@ jobs:
           distribution: graalvm
           java-version: '25'
           cache: maven
+      - name: Set up pinned Maven
+        run: |
+          cd "${RUNNER_TEMP}"
+          mvn --batch-mode --no-transfer-progress \
+            org.apache.maven.plugins:maven-wrapper-plugin:3.3.4:wrapper \
+            "-Dmaven=${KUBLING_MAVEN_VERSION}" \
+            -Dtype=bin \
+            "-DdistributionSha256Sum=${KUBLING_MAVEN_DISTRIBUTION_SHA256}"
+          "${RUNNER_TEMP}/mvnw" --batch-mode --version
+          echo "MAVEN_COMMAND=${RUNNER_TEMP}/mvnw" >> "${GITHUB_ENV}"
       - name: Validate coordinated version and build JDK
         run: |
           python3 tools/check_release.py all
@@ -36,7 +50,7 @@ jobs:
         run: |
           test -n "${MAVEN_GPG_KEY}" || { echo 'Missing MAVEN_GPG_PRIVATE_KEY'; exit 1; }
           test -n "${MAVEN_GPG_PASSPHRASE}" || { echo 'Missing MAVEN_GPG_PASSPHRASE'; exit 1; }
-          mvn --batch-mode --no-transfer-progress -f sdk-java/pom.xml -Prelease -Dgpg.useagent=false clean verify
+          "${MAVEN_COMMAND}" --batch-mode --no-transfer-progress -f sdk-java/pom.xml -Prelease -Dgpg.useagent=false clean verify
       - name: Inspect packages and verify signatures
         run: |
           python3 tools/check_packages.py java
