@@ -17,6 +17,7 @@ on:
       - 'VERSION'
       - 'tools/bootstrap.sh'
       - 'tools/check_release.py'
+      - 'tools/tests/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/sdk-go.yml'
   pull_request:
@@ -33,6 +34,7 @@ on:
       - 'VERSION'
       - 'tools/bootstrap.sh'
       - 'tools/check_release.py'
+      - 'tools/tests/**'
       - '.github/workflows/_go-module.yml'
       - '.github/workflows/sdk-go.yml'
 
@@ -50,12 +52,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Validate coordinated version
+      - name: Test release validation
+        run: python3 -m unittest discover -s tools/tests -v
+
+      - name: Validate release versions
         run: |
           python3 tools/check_release.py all
+          python3 tools/check_release.py go-maintenance
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             python3 tools/check_release.py go "${GITHUB_REF_NAME}"
-            python3 tools/check_release.py train HEAD
+            if [[ "$(cat sdk-go/VERSION)" == "$(cat VERSION)" ]]; then
+              python3 tools/check_release.py train HEAD
+            fi
           fi
 
       - name: Set up Go
@@ -103,6 +111,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Validate release tag and module
         run: |
@@ -112,8 +122,14 @@ jobs:
             exit 1
           fi
 
+          python3 tools/check_release.py all
           python3 tools/check_release.py go "${GITHUB_REF_NAME}"
-          python3 tools/check_release.py train HEAD
+          python3 tools/check_release.py go-maintenance
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${GITHUB_REF_NAME}^{commit}")"
+          git merge-base --is-ancestor HEAD origin/main
+          if [[ "$(cat sdk-go/VERSION)" == "$(cat VERSION)" ]]; then
+            python3 tools/check_release.py train HEAD
+          fi
 
           module="$(sed -n 's/^module //p' sdk-go/go.mod)"
           if [[ "${module}" != "github.com/kubling-community/kubling-providers/sdk-go" ]]; then

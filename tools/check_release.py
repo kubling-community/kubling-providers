@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the canonical provider contract release version and tags."""
+"""Validate provider contract, SDK and release-tag identities."""
 
 import argparse
 from pathlib import Path
@@ -20,14 +20,36 @@ TAG_PREFIXES = {
     "java": "sdk-java/v",
     "python": "sdk-python/v",
 }
-PROVIDER_MODULES = ("cassandra", "inmemory", "kubernetes", "openapi", "redis")
+PROVIDER_MODULES = (
+    "cassandra",
+    "host",
+    "inmemory",
+    "kubernetes",
+    "openapi",
+    "redis",
+)
+
+
+def stable_version(path, label):
+    version = path.read_text(encoding="utf-8").strip()
+    if not STABLE_VERSION.fullmatch(version):
+        raise ValueError(f"{label} must contain one stable MAJOR.MINOR.PATCH version")
+    return version
 
 
 def release_version(root=ROOT):
-    version = (root / "VERSION").read_text(encoding="utf-8").strip()
-    if not STABLE_VERSION.fullmatch(version):
-        raise ValueError("VERSION must contain one stable MAJOR.MINOR.PATCH version")
-    return version
+    return stable_version(root / "VERSION", "VERSION")
+
+
+def go_sdk_version(root=ROOT):
+    return stable_version(root / "sdk-go/VERSION", "sdk-go/VERSION")
+
+
+def version_numbers(version):
+    match = STABLE_VERSION.fullmatch(version)
+    if not match:
+        raise ValueError(f"Invalid stable release version: {version}")
+    return tuple(int(part) for part in match.groups())
 
 
 def package_versions(root=ROOT):
@@ -52,6 +74,7 @@ def package_versions(root=ROOT):
 
 def validate_manifests(root=ROOT):
     version = release_version(root)
+    sdk_version = go_sdk_version(root)
     packages = package_versions(root)
     mismatches = {
         language: packages[language]
@@ -64,9 +87,11 @@ def validate_manifests(root=ROOT):
     if packages["shared_java"] != "1.1.1" or packages["shared_python"] != [
         "kubling-grpc==1.1.1"
     ]:
-        raise ValueError("Java and Python packages must use the shared kubling-grpc 1.1.1 contract")
+        raise ValueError(
+            "Java and Python packages must use the shared kubling-grpc 1.1.1 contract"
+        )
 
-    expected_sdk = f"github.com/kubling-community/kubling-providers/sdk-go v{version}"
+    expected_sdk = f"github.com/kubling-community/kubling-providers/sdk-go v{sdk_version}"
     stale_modules = [
         name
         for name in PROVIDER_MODULES
@@ -75,7 +100,7 @@ def validate_manifests(root=ROOT):
     ]
     if stale_modules:
         raise ValueError(
-            "Provider modules do not use the coordinated Go SDK version: "
+            f"Provider modules do not use Go SDK v{sdk_version}: "
             + ", ".join(stale_modules)
         )
 
@@ -89,7 +114,9 @@ def release_tags(version):
 
 
 def validate_tag(language, tag, root=ROOT):
-    expected = release_tags(validate_manifests(root))[language]
+    contract_version = validate_manifests(root)
+    version = go_sdk_version(root) if language == "go" else contract_version
+    expected = TAG_PREFIXES[language] + version
     if tag != expected:
         raise ValueError(f"Expected tag {expected}, got {tag}")
     return expected
@@ -112,8 +139,62 @@ def tag_commit(tag, root=ROOT):
     return result or None
 
 
-def validate_tags_available(root=ROOT):
+def validate_coordinated_version(root=ROOT):
     version = validate_manifests(root)
+    sdk_version = go_sdk_version(root)
+    if sdk_version != version:
+        raise ValueError(
+            "Coordinated contract releases require sdk-go/VERSION to equal "
+            f"VERSION {version}; found {sdk_version}"
+        )
+    return version
+
+
+def validate_go_maintenance(root=ROOT):
+    contract_version = validate_manifests(root)
+    sdk_version = go_sdk_version(root)
+    if sdk_version == contract_version:
+        return contract_version, sdk_version, None
+
+    contract_numbers = version_numbers(contract_version)
+    sdk_numbers = version_numbers(sdk_version)
+    if sdk_numbers[:2] != contract_numbers[:2] or sdk_numbers[2] <= contract_numbers[2]:
+        raise ValueError(
+            "An independent Go SDK release must be a later patch of the current "
+            f"contract version {contract_version}; found {sdk_version}"
+        )
+
+    tags = release_tags(contract_version)
+    resolved = {tag: tag_commit(tag, root) for tag in tags.values()}
+    missing = [tag for tag, commit in resolved.items() if commit is None]
+    if missing:
+        raise ValueError(
+            "Cannot validate the Go SDK maintenance base; missing coordinated tags: "
+            + ", ".join(missing)
+        )
+
+    base_commit = resolved[tags["proto"]]
+    mismatches = {tag: commit for tag, commit in resolved.items() if commit != base_commit}
+    if mismatches:
+        details = ", ".join(f"{tag}={commit}" for tag, commit in mismatches.items())
+        raise ValueError(
+            f"Contract {contract_version} tags do not identify one release: {details}"
+        )
+
+    protocol_paths = (":(glob)proto/**/*.proto", "buf.yaml", "buf.lock")
+    changed = git("diff", "--name-only", tags["proto"], "--", *protocol_paths, root=root)
+    if changed:
+        details = ", ".join(changed.splitlines())
+        raise ValueError(
+            "Independent Go SDK releases cannot change the provider protocol; "
+            f"changed paths: {details}"
+        )
+
+    return contract_version, sdk_version, base_commit
+
+
+def validate_tags_available(root=ROOT):
+    version = validate_coordinated_version(root)
     existing = [tag for tag in release_tags(version).values() if tag_commit(tag, root)]
     if existing:
         raise ValueError("Release tags already exist: " + ", ".join(existing))
@@ -121,7 +202,7 @@ def validate_tags_available(root=ROOT):
 
 
 def validate_release_train(expected_commit="HEAD", root=ROOT):
-    version = validate_manifests(root)
+    version = validate_coordinated_version(root)
     expected = git("rev-parse", f"{expected_commit}^{{commit}}", root=root)
     resolved = {tag: tag_commit(tag, root) for tag in release_tags(version).values()}
     missing = [tag for tag, commit in resolved.items() if commit is None]
@@ -136,14 +217,20 @@ def validate_release_train(expected_commit="HEAD", root=ROOT):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("target", choices=("all", "available", "train", *TAG_PREFIXES))
+    parser.add_argument(
+        "target",
+        choices=("all", "available", "train", "go-maintenance", *TAG_PREFIXES),
+    )
     parser.add_argument("value", nargs="?", help="Tag or expected commit")
     args = parser.parse_args()
     try:
         if args.target == "all":
             if args.value:
                 parser.error("all does not accept a value")
-            print(f"Validated coordinated version {validate_manifests()}")
+            contract_version = validate_manifests()
+            print(
+                f"Validated contract {contract_version} and Go SDK {go_sdk_version()}"
+            )
         elif args.target == "available":
             if args.value:
                 parser.error("available does not accept a value")
@@ -151,6 +238,20 @@ def main():
         elif args.target == "train":
             version, commit = validate_release_train(args.value or "HEAD")
             print(f"Validated release train {version} at {commit}")
+        elif args.target == "go-maintenance":
+            if args.value:
+                parser.error("go-maintenance does not accept a value")
+            contract_version, sdk_version, base_commit = validate_go_maintenance()
+            if base_commit is None:
+                print(
+                    f"Go SDK {sdk_version} is coordinated with contract "
+                    f"{contract_version}"
+                )
+            else:
+                print(
+                    f"Validated Go SDK {sdk_version} maintenance base "
+                    f"for contract {contract_version} at {base_commit}"
+                )
         else:
             if not args.value:
                 parser.error(f"{args.target} requires a tag")

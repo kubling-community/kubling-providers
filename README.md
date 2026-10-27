@@ -38,8 +38,9 @@ their packages. Run tests for a provider from that provider's module directory.
 
 ## Releases
 
-The protocol and generated bindings are released together. Provider runtimes
-keep independent lifecycles. See the [maintainer release
+Contract changes and their generated bindings are released together. The Go
+SDK may also receive independent maintenance patches. Provider runtimes keep
+independent lifecycles. See the [maintainer release
 process](docs/maintainers/releases.md).
 
 ## Contributing
