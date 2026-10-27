@@ -171,6 +171,25 @@ func TestDeleteBindsPathFilter(t *testing.T) {
 	}
 }
 
+func TestDeleteRejectsTraversalPathValueBeforeHTTP(t *testing.T) {
+	requested := false
+	connection := newMutationTestConnection(t, testHTTPClient(func(*http.Request) (*http.Response, error) {
+		requested = true
+		return jsonResponse(http.StatusNoContent, ""), nil
+	}))
+
+	_, err := connection.Delete(context.Background(), &providerv1.DeleteRequest{
+		Entity: mutationEntity(),
+		Filter: equality(field("id"), literalString("..")),
+	})
+	if status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "is not allowed") {
+		t.Fatalf("Delete() error = %v, want InvalidArgument traversal rejection", err)
+	}
+	if requested {
+		t.Fatal("Delete() executed HTTP for an unsafe path value")
+	}
+}
+
 func TestUpdateRejectsFilterNotBoundToPath(t *testing.T) {
 	requested := false
 	connection := newMutationTestConnection(t, testHTTPClient(func(*http.Request) (*http.Response, error) {

@@ -1,0 +1,55 @@
+# Exposes GitHub releases and their assets as parameterized relational tables.
+# The provider remains repository-agnostic: resource identifiers arrive as
+# equality predicates at query time.
+specFile: https://raw.githubusercontent.com/github/rest-api-description/755ee33b4a81d51f6f07a902cce26cbec3b822f2/descriptions/api.github.com/api.github.com.yaml
+baseUrl: https://api.github.com
+namespace: github
+requestTimeout: 60s
+
+headers:
+  Accept: application/vnd.github+json
+  X-GitHub-Api-Version: "2026-03-10"
+  User-Agent: kubling-openapi-provider
+  Authorization: Bearer ${GITHUB_TOKEN}
+
+entities:
+  - name: RELEASE
+    listOperation: repos/list-releases
+    pathParameters:
+      - parameter: owner
+        field: repository_owner
+      - parameter: repo
+        field: repository_name
+    primaryKey:
+      - repository_owner
+      - repository_name
+      - id
+    pagination:
+      mode: PAGE
+      pageSize: 100
+      pageSizeParameter: per_page
+      pageParameter: page
+      startPage: 1
+      maxPages: 5
+
+  - name: RELEASE_ASSET
+    listOperation: repos/list-release-assets
+    pathParameters:
+      - parameter: owner
+        field: repository_owner
+      - parameter: repo
+        field: repository_name
+      - parameter: release_id
+        field: release_id
+    primaryKey:
+      - repository_owner
+      - repository_name
+      - release_id
+      - id
+    pagination:
+      mode: PAGE
+      pageSize: 100
+      pageSizeParameter: per_page
+      pageParameter: page
+      startPage: 1
+      maxPages: 5

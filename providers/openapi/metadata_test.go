@@ -61,6 +61,9 @@ func TestProviderBuildsReadOnlyMetadataFromOpenAPI(t *testing.T) {
 	if len(table.Keys) != 1 || table.Keys[0].Kind != providerv1.KeyKind_KEY_KIND_PRIMARY || !slices.Equal(table.Keys[0].Columns, []string{"id"}) {
 		t.Fatalf("Metadata() keys = %#v", table.Keys)
 	}
+	if len(table.GetAccessPatterns()) != 0 {
+		t.Fatalf("Metadata() access patterns = %#v, want none for optional filters", table.GetAccessPatterns())
+	}
 
 	wantNames := []string{"active", "amount", "createdAt", "id", "labels", "note", "priority"}
 	gotNames := make([]string, len(table.Columns))
@@ -140,6 +143,105 @@ func TestProviderBuildsConfiguredStableKeyMetadata(t *testing.T) {
 	stableKey := globalID.GetStableKey()
 	if stableKey == nil || !slices.Equal(stableKey.Columns, []string{"active", "id"}) || stableKey.Format != providerv1.StableKeyFormat_STABLE_KEY_FORMAT_VAL_PK_V1 {
 		t.Fatalf("stable key metadata = %#v", stableKey)
+	}
+}
+
+func TestProviderBuildsParameterizedListMetadata(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testParameterizedOpenAPISpec)
+
+	provider, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://api.example.test/v1",
+		Entities: []EntityConfig{{
+			Name:          "RELEASE",
+			ListOperation: "listReleases",
+			PathParameters: []PathParameterConfig{
+				{Parameter: "owner", Field: "owner"},
+				{Parameter: "repository", Field: "repository_name"},
+			},
+			EqualityFilters: []EqualityFilterConfig{{Field: "channel", Parameter: "channel"}},
+			StableKey: &StableKeyConfig{
+				Name:    "identifier",
+				Columns: []string{"owner", "repository_name", "id"},
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	table := metadata.Tables[0]
+	columns := make(map[string]*providerv1.ColumnMetadata, len(table.Columns))
+	for _, column := range table.Columns {
+		columns[column.Name] = column
+	}
+	for _, name := range []string{"owner", "repository_name", "channel"} {
+		column := columns[name]
+		if column == nil {
+			t.Fatalf("binding column %q is missing from %#v", name, table.Columns)
+		}
+		if column.Searchability != providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_EQUALITY || column.GetNullable() {
+			t.Fatalf("binding column %q = %#v", name, column)
+		}
+		if column.Properties["openapi.parameter_bindings"] == "" {
+			t.Fatalf("binding column %q properties = %v", name, column.Properties)
+		}
+	}
+	if columns["owner"].Properties["openapi.parameter_bindings"] != "path:owner" {
+		t.Fatalf("owner bindings = %q", columns["owner"].Properties["openapi.parameter_bindings"])
+	}
+	if columns["repository_name"].Properties["openapi.parameter_bindings"] != "path:repository" {
+		t.Fatalf("repository bindings = %q", columns["repository_name"].Properties["openapi.parameter_bindings"])
+	}
+	if columns["channel"].Properties["openapi.parameter_bindings"] != "query:channel" {
+		t.Fatalf("channel bindings = %q", columns["channel"].Properties["openapi.parameter_bindings"])
+	}
+
+	patterns := table.GetAccessPatterns()
+	if len(patterns) != 1 || patterns[0].GetName() != "AP_RELEASE_REQUIRED_BINDINGS" ||
+		!slices.Equal(patterns[0].GetColumns(), []string{"owner", "repository_name", "channel"}) {
+		t.Fatalf("access patterns = %#v", patterns)
+	}
+	identifier := columns["identifier"]
+	if identifier == nil || identifier.GetStableKey() == nil ||
+		!slices.Equal(identifier.GetStableKey().GetColumns(), []string{"owner", "repository_name", "id"}) {
+		t.Fatalf("stable identifier = %#v", identifier)
+	}
+}
+
+func TestProviderOmitsStaticListBindingsFromAccessPattern(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testParameterizedOpenAPISpec)
+
+	provider, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://api.example.test/v1",
+		Entities: []EntityConfig{{
+			Name:          "RELEASE",
+			ListOperation: "listReleases",
+			PathParameters: []PathParameterConfig{
+				{Parameter: "owner", Value: "acme"},
+				{Parameter: "repository", Value: "widget"},
+			},
+			QueryParameters: []QueryParameterConfig{{Name: "channel", Value: "stable"}},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+
+	metadata, err := provider.Metadata(context.Background())
+	if err != nil {
+		t.Fatalf("Metadata() error = %v", err)
+	}
+	patterns := metadata.Tables[0].GetAccessPatterns()
+	if len(patterns) != 0 {
+		t.Fatalf("access patterns = %#v, want none for fixed bindings", patterns)
 	}
 }
 
@@ -271,14 +373,14 @@ func TestNewRejectsInvalidEntityDiscovery(t *testing.T) {
 			want: `query parameter "missing" is not defined`,
 		},
 		{
-			name: "equality field absent",
+			name: "path parameter absent",
 			entity: EntityConfig{
-				Name:            "INVOICE",
-				ListOperation:   "listInvoices",
-				ResponsePath:    "/data/items",
-				EqualityFilters: []EqualityFilterConfig{{Field: "missing", Parameter: "status"}},
+				Name:           "INVOICE",
+				ListOperation:  "listInvoices",
+				ResponsePath:   "/data/items",
+				PathParameters: []PathParameterConfig{{Parameter: "owner", Field: "owner"}},
 			},
-			want: `equality filter field "missing" is not present`,
+			want: `path parameter "owner" is not defined`,
 		},
 	}
 
@@ -313,6 +415,57 @@ func TestNewRejectsUnboundRequiredQueryParameter(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), `required query parameter "status" has no static, filter or pagination binding`) {
 		t.Fatalf("New() error = %v, want required parameter binding error", err)
+	}
+}
+
+func TestNewRejectsUnboundListPathParameter(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testParameterizedOpenAPISpec)
+
+	_, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://api.example.test/v1",
+		Entities: []EntityConfig{{
+			Name:          "RELEASE",
+			ListOperation: "listReleases",
+			PathParameters: []PathParameterConfig{{
+				Parameter: "owner",
+				Field:     "owner",
+			}},
+			QueryParameters: []QueryParameterConfig{{Name: "channel", Value: "stable"}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), `path parameter "repository" has no field or static binding`) {
+		t.Fatalf("New() error = %v, want missing path parameter binding", err)
+	}
+}
+
+func TestNewRejectsIncompatibleBindingColumnType(t *testing.T) {
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	spec := strings.Replace(
+		testParameterizedOpenAPISpec,
+		"                  properties:\n                    id:",
+		"                  properties:\n                    owner:\n                      type: integer\n                    id:",
+		1,
+	)
+	writeTestFile(t, specPath, spec)
+
+	_, err := New(Config{
+		SpecFile: specPath,
+		BaseURL:  "https://api.example.test/v1",
+		Entities: []EntityConfig{{
+			Name:          "RELEASE",
+			ListOperation: "listReleases",
+			PathParameters: []PathParameterConfig{
+				{Parameter: "owner", Field: "owner"},
+				{Parameter: "repository", Value: "widget"},
+			},
+			QueryParameters: []QueryParameterConfig{{Name: "channel", Value: "stable"}},
+		}},
+	})
+	if err == nil || !strings.Contains(err.Error(), `path parameter "owner" field "owner" has type`) ||
+		!strings.Contains(err.Error(), "incompatible with column type") {
+		t.Fatalf("New() error = %v, want incompatible binding column type", err)
 	}
 }
 
@@ -448,4 +601,60 @@ components:
                 - string
                 - "null"
               maxLength: 120
+`
+
+const testParameterizedOpenAPISpec = `
+openapi: 3.1.0
+info:
+  title: Artifact API
+  version: 1.0.0
+paths:
+  /owners/{owner}/repositories/{repository}/releases:
+    parameters:
+      - name: owner
+        in: path
+        required: true
+        description: Repository owner.
+        schema:
+          type: string
+    get:
+      operationId: listReleases
+      summary: Lists releases.
+      parameters:
+        - name: repository
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: channel
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: per_page
+          in: query
+          schema:
+            type: integer
+        - name: page
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Releases.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required:
+                    - id
+                    - name
+                  properties:
+                    id:
+                      type: integer
+                      format: int64
+                    name:
+                      type: string
 `

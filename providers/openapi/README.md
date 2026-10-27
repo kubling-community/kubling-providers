@@ -154,7 +154,7 @@ embedded in `baseUrl` user information are never accepted.
 response body itself is an array. The selected value must be an array of JSON
 objects.
 
-`primaryKey` is optional. Every listed field must exist in the discovered row
+`primaryKey` is optional. Every listed field must exist in the exposed table
 schema. The provider marks key fields as non-nullable in the returned metadata.
 
 An explicit entity may instead define an engine-generated stable key composed
@@ -172,7 +172,8 @@ stableKey:
 key and is never projected to or mutated through the API. Kubling generates its
 value and unfolds supported predicates back to the component fields.
 `primaryKey` and `stableKey` are mutually exclusive. Every component must exist
-in the response row schema.
+in the exposed table schema, which may include request-binding fields that the
+provider adds to the response shape.
 
 The configuration may contain static request headers. Do not commit secrets in
 example files; mount or generate the real provider configuration through the
@@ -187,6 +188,54 @@ parameter. This is intentionally not inferred: the mapping asserts that
 Mapped columns are exposed as equality-searchable metadata. Logical `AND` is
 supported when every operand can be translated through one of these bindings.
 
+### Parameterized list operations
+
+Entity-level `pathParameters` makes collection operations below a resource
+path queryable without creating one provider instance per resource. For an
+operation such as `GET /repos/{owner}/{repo}/releases`:
+
+```yaml
+entities:
+  - name: RELEASE
+    listOperation: listReleases
+    pathParameters:
+      - parameter: owner
+        field: repository_owner
+      - parameter: repo
+        field: repository_name
+```
+
+Kubling can then bind one remote collection with ordinary equality predicates:
+
+```sql
+SELECT id, name
+FROM github.RELEASE
+WHERE repository_owner = 'example'
+  AND repository_name = 'service-api';
+```
+
+Each `field` becomes an equality-searchable column. Required dynamic path and
+query bindings form a table access pattern, allowing the planner to reject an
+unbounded scan and to supply values through dependent joins. The provider also
+validates the complete binding before starting HTTP.
+
+When the response does not repeat a binding field, its request value is
+materialized as a virtual column in every returned row and remains stable
+across pagination. The same field may therefore participate in a primary or
+stable key. A path parameter may instead use `value` for a fixed scope:
+
+```yaml
+pathParameters:
+  - parameter: owner
+    value: example
+  - parameter: repo
+    field: repository_name
+```
+
+Bound values are encoded as one URL path segment. Slashes and reserved
+characters cannot introduce another path, query, fragment or datasource
+origin.
+
 ## Mutations
 
 Write operations are always explicit. OpenAPI describes HTTP syntax but cannot
@@ -199,10 +248,11 @@ An entity may map any subset of:
 - `update` to a `PATCH` or `PUT` operation.
 - `delete` to a `DELETE` operation.
 
-`pathParameters` binds an OpenAPI path parameter either to a table field or to
-a fixed value. Update and delete require at least one field-bound path
-parameter. Their Kubling filter must contain exact equality values for every
-bound field and no unrelated predicates; collection-wide writes are rejected.
+Within a mutation mapping, `pathParameters` binds an OpenAPI path parameter
+either to a table field or to a fixed value. Update and delete require at least
+one field-bound path parameter. Their Kubling filter must contain exact
+equality values for every bound field and no unrelated predicates;
+collection-wide writes are rejected.
 
 ```yaml
 mutations:
@@ -258,8 +308,12 @@ match both selectors.
 
 An operation is discovered only when it:
 
-- Is a `GET` operation with an `operationId` and no path template.
-- Has no required operation or path-level parameters.
+- Is a `GET` operation with an `operationId`.
+- Uses only required scalar path parameters with standard simple
+  serialization; each one becomes a same-named equality access column.
+- Has no path parameter name that collides with a response property; those
+  semantics require an explicit field mapping.
+- Has no required query, header or cookie parameters.
 - Has a successful JSON response containing exactly one array of objects.
 
 The table name is derived, in order, from the array item schema reference, its
@@ -288,9 +342,11 @@ entities:
 
 Discovery deliberately does not guess authentication semantics, primary or
 stable keys, filter equivalence, pagination conventions or write semantics.
-Operations with multiple object arrays, required parameters or special request
-semantics remain explicit. An `includeOperations` entry that cannot be safely
-discovered fails startup with the reason instead of being silently ignored.
+Operations with multiple object arrays, required non-path parameters or special
+request semantics remain explicit. Use an explicit entity to rename a path
+binding field or replace it with a fixed value. An `includeOperations` entry
+that cannot be safely discovered fails startup with the reason instead of
+being silently ignored.
 
 ## Configuration template generation
 
@@ -314,8 +370,11 @@ namespace: example
 Unlike conservative runtime discovery, the generator includes every object
 array found in a successful JSON response, including multiple arrays from the
 same operation. It also creates placeholders for required query parameters and
-recognizes common cursor and page pagination shapes. Skipped operations and
-inferred values are recorded as YAML comments.
+recognizes common cursor and page pagination shapes. Parameterized collection
+paths receive field-bound `pathParameters`; review those field names before
+use. Candidates with ambiguous path/response field names are skipped rather
+than merged. Skipped operations and inferred values are recorded as YAML
+comments.
 
 The generated file is a starting point, not an executable interpretation of
 API semantics. Review entity names, choose primary keys, verify pagination and
@@ -417,7 +476,9 @@ When `hasMorePath` is configured, it must resolve to a boolean and `false`
 stops pagination even if the response still contains a cursor. A true value
 requires a non-empty next cursor. Repeated cursors are rejected. `maxPages`
 defaults to `10000` and prevents a broken API from creating an unbounded
-request loop.
+request loop. Reaching the guardrail fails an attempt to fetch another page;
+it never turns an incomplete result into a successful, silently truncated
+query.
 
 This pagination is an HTTP transport concern. SQL limit and offset are enforced
 exactly by the provider. Offset pagination starts directly at the requested
@@ -460,6 +521,7 @@ The query implementation supports:
 - Literal projections.
 - Lazy HTTP pagination and streamed gRPC batches.
 - Static query parameters declared by the operation.
+- Fixed and equality-bound path parameters declared by the operation.
 - Explicit field-to-query-parameter equality bindings and logical `AND`.
 - Exact SQL limit and offset handling.
 - Exact conversion according to the discovered column metadata.
@@ -499,6 +561,20 @@ The config path defaults from `KUBLING_OPENAPI_CONFIG`; the container sets it
 to `/etc/kubling/provider.yaml`. `config.example.yaml` is the minimum generic
 starting point. API-specific examples live under `examples/` and are examples,
 not special behavior built into the provider.
+
+[`examples/github-releases.yaml`](examples/github-releases.yaml) demonstrates
+repository-scoped release and release-asset tables selected at query time.
+`RELEASE` requires equality values for `repository_owner` and
+`repository_name`; `RELEASE_ASSET` additionally requires `release_id`. The
+provider materializes those bound values as columns in every returned row and
+rejects a query before HTTP when any required binding is missing. No provider
+restart or per-repository entity is needed.
+
+The example deliberately pins both the official API description revision and
+the requested API version so metadata and request behavior remain
+reproducible. Its page limit is a safety guardrail, not a completeness promise:
+choose a realistic bound for the expected collection size and avoid values so
+large that they effectively permit an unbounded request loop.
 
 `examples/openai-management.yaml` demonstrates a broader management surface:
 organization projects, users, admin API keys, audit logs, completions usage and
@@ -600,10 +676,11 @@ go test ./...
 ## Current boundaries
 
 - Only OpenAPI 3.x documents and successful JSON `GET` responses are supported.
-- List operation paths containing required path parameters are not supported.
+- List path parameters must be required scalars using standard simple,
+  non-exploded serialization.
 - The row schema must describe an object; top-level `oneOf` and `anyOf` row
   schemas are rejected.
 - Remote OpenAPI references are disabled. Local file references are supported.
-- Required operation parameters other than configured authentication and
-  pagination are not populated automatically.
+- Required query, header and cookie parameters are not inferred by runtime
+  discovery and need an explicit entity mapping.
 - OAuth2 token acquisition, OpenID Connect and mutual TLS remain future work.

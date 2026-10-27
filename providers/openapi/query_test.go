@@ -132,6 +132,55 @@ func TestOperationURLRejectsOriginChanges(t *testing.T) {
 	}
 }
 
+func TestOperationURLWithParametersEncodesSinglePathSegments(t *testing.T) {
+	endpoint, err := operationURLWithParameters(
+		"https://billing.example.test/api",
+		"/owners/{owner}/repositories/{repository}/releases",
+		map[string]string{
+			"owner":      "acme",
+			"repository": "widget api/blue?#%ñ",
+		},
+	)
+	if err != nil {
+		t.Fatalf("operationURLWithParameters() error = %v", err)
+	}
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		t.Fatalf("url.Parse() error = %v", err)
+	}
+	wantPath := "/api/owners/acme/repositories/widget%20api%2Fblue%3F%23%25%C3%B1/releases"
+	if parsed.EscapedPath() != wantPath || parsed.RawQuery != "" || parsed.Host != "billing.example.test" {
+		t.Fatalf("expanded URL = %q (escaped path %q), want path %q", endpoint, parsed.EscapedPath(), wantPath)
+	}
+}
+
+func TestOperationURLWithParametersRejectsUnsafeOrAmbiguousPaths(t *testing.T) {
+	tests := []struct {
+		name       string
+		path       string
+		parameters map[string]string
+		want       string
+	}{
+		{name: "dot value", path: "/items/{id}", parameters: map[string]string{"id": "."}, want: "is not allowed"},
+		{name: "dot dot value", path: "/items/{id}", parameters: map[string]string{"id": ".."}, want: "is not allowed"},
+		{name: "empty value", path: "/items/{id}", parameters: map[string]string{"id": ""}, want: "is empty"},
+		{name: "unbound", path: "/items/{id}", want: "is unbound"},
+		{name: "unused", path: "/items", parameters: map[string]string{"id": "one"}, want: "is not present"},
+		{name: "static traversal", path: "../items", want: "is not allowed"},
+		{name: "encoded static traversal", path: "%2e%2e/items", want: "is not allowed"},
+		{name: "query", path: "/items?admin=true", want: "must not contain a query"},
+		{name: "fragment", path: "/items#admin", want: "must not contain a query or fragment"},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := operationURLWithParameters("https://billing.example.test/api", test.path, test.parameters)
+			if err == nil || !strings.Contains(err.Error(), test.want) {
+				t.Fatalf("operationURLWithParameters() error = %v, want containing %q", err, test.want)
+			}
+		})
+	}
+}
+
 func TestDatasourceTransportRequiresExplicitHTTPOptInForCredentials(t *testing.T) {
 	config := Config{
 		BaseURL: "http://api.example.test",
@@ -261,6 +310,130 @@ func TestQueryAppliesStaticParametersAndEqualityFilters(t *testing.T) {
 	}
 }
 
+func TestQueryBindsParameterizedPathAndMaterializesScopeAcrossPages(t *testing.T) {
+	var pages []string
+	client := testHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.Method != http.MethodGet || request.URL.EscapedPath() != "/v1/owners/acme/repositories/widget%20api/releases" {
+			t.Errorf("request = %s %s", request.Method, request.URL.EscapedPath())
+		}
+		query := request.URL.Query()
+		if query.Get("channel") != "stable" || query.Get("per_page") != "1" || query.Get("owner") != "" || query.Get("repository") != "" {
+			t.Errorf("request query = %v", query)
+		}
+		page := query.Get("page")
+		pages = append(pages, page)
+		if page == "1" {
+			return jsonResponse(http.StatusOK, `[{"id":7,"name":"v1"}]`), nil
+		}
+		return jsonResponse(http.StatusOK, `[]`), nil
+	})
+	connection := newParameterizedTestConnection(t, client, EntityConfig{
+		Name:          "RELEASE",
+		ListOperation: "listReleases",
+		PathParameters: []PathParameterConfig{
+			{Parameter: "owner", Field: "owner"},
+			{Parameter: "repository", Field: "repository_name"},
+		},
+		EqualityFilters: []EqualityFilterConfig{{Field: "channel", Parameter: "channel"}},
+		Pagination: &PaginationConfig{
+			Mode:              PaginationModePage,
+			PageSize:          1,
+			PageSizeParameter: "per_page",
+			PageParameter:     "page",
+		},
+	})
+
+	stream, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity: &providerv1.EntityReference{Name: "RELEASE", Namespace: "artifacts"},
+		Filter: logicalAND(
+			equality(field("owner"), literalString("acme")),
+			equality(field("repository_name"), literalString("widget api")),
+			equality(field("channel"), literalString("stable")),
+		),
+		Projections: []*providerv1.Projection{
+			{Expression: field("owner")},
+			{Expression: field("repository_name")},
+			{Expression: field("channel")},
+			{Expression: field("id")},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	batch, err := stream.Next(context.Background())
+	if err != nil {
+		t.Fatalf("Next() error = %v", err)
+	}
+	if len(pages) != 2 || pages[0] != "1" || pages[1] != "2" {
+		t.Fatalf("pagination requests = %v", pages)
+	}
+	if len(batch.Tuples) != 1 {
+		t.Fatalf("tuples = %#v", batch.Tuples)
+	}
+	values := batch.Tuples[0].GetValues()
+	if values[0].GetStringValue() != "acme" || values[1].GetStringValue() != "widget api" ||
+		values[2].GetStringValue() != "stable" || values[3].GetLongValue() != 7 {
+		t.Fatalf("parameterized tuple = %#v", values)
+	}
+}
+
+func TestQueryUsesFixedListPathParametersWithoutFilter(t *testing.T) {
+	client := testHTTPClient(func(request *http.Request) (*http.Response, error) {
+		if request.URL.Path != "/v1/owners/acme/repositories/widget/releases" || request.URL.Query().Get("channel") != "stable" {
+			t.Errorf("request URL = %s", request.URL.String())
+		}
+		return jsonResponse(http.StatusOK, `[{"id":7,"name":"v1"}]`), nil
+	})
+	connection := newParameterizedTestConnection(t, client, EntityConfig{
+		Name:          "RELEASE",
+		ListOperation: "listReleases",
+		PathParameters: []PathParameterConfig{
+			{Parameter: "owner", Value: "acme"},
+			{Parameter: "repository", Value: "widget"},
+		},
+		QueryParameters: []QueryParameterConfig{{Name: "channel", Value: "stable"}},
+	})
+
+	stream, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity:      &providerv1.EntityReference{Name: "RELEASE", Namespace: "artifacts"},
+		Projections: []*providerv1.Projection{{Expression: field("id")}},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+	batch, err := stream.Next(context.Background())
+	if err != nil || len(batch.Tuples) != 1 || batch.Tuples[0].Values[0].GetLongValue() != 7 {
+		t.Fatalf("Next() = %#v, %v", batch, err)
+	}
+}
+
+func TestQueryRejectsMissingPathBindingBeforeHTTP(t *testing.T) {
+	requested := false
+	connection := newParameterizedTestConnection(t, testHTTPClient(func(*http.Request) (*http.Response, error) {
+		requested = true
+		return jsonResponse(http.StatusOK, `[]`), nil
+	}), EntityConfig{
+		Name:          "RELEASE",
+		ListOperation: "listReleases",
+		PathParameters: []PathParameterConfig{
+			{Parameter: "owner", Field: "owner"},
+			{Parameter: "repository", Field: "repository_name"},
+		},
+		QueryParameters: []QueryParameterConfig{{Name: "channel", Value: "stable"}},
+	})
+
+	_, err := connection.Query(context.Background(), &providerv1.QueryRequest{
+		Entity: &providerv1.EntityReference{Name: "RELEASE", Namespace: "artifacts"},
+		Filter: equality(field("owner"), literalString("acme")),
+	})
+	if status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), `path parameter "repository" requires an equality filter`) {
+		t.Fatalf("Query() error = %v, want missing path binding", err)
+	}
+	if requested {
+		t.Fatal("Query() executed HTTP for a missing path binding")
+	}
+}
+
 func TestQueryRejectsUnboundFilterBeforeHTTP(t *testing.T) {
 	requested := false
 	client := testHTTPClient(func(*http.Request) (*http.Response, error) {
@@ -273,7 +446,7 @@ func TestQueryRejectsUnboundFilterBeforeHTTP(t *testing.T) {
 		Entity: &providerv1.EntityReference{Name: "INVOICE", Namespace: "billing"},
 		Filter: equality(field("id"), literalString("inv-1")),
 	})
-	if status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "no equality filter binding") {
+	if status.Code(err) != codes.InvalidArgument || !strings.Contains(err.Error(), "no request parameter binding") {
 		t.Fatalf("Query() error = %v, want unbound filter InvalidArgument", err)
 	}
 	if requested {
@@ -652,6 +825,27 @@ func newTestConnectionWithEntity(t *testing.T, baseURL string, client *http.Clie
 		HTTPClient: client,
 		Namespace:  "billing",
 		Headers:    map[string]string{"Authorization": "Bearer test-token"},
+		Entities:   []EntityConfig{entity},
+	})
+	if err != nil {
+		t.Fatalf("New() error = %v", err)
+	}
+	connection, err := provider.Open(context.Background())
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	return connection.(*Connection)
+}
+
+func newParameterizedTestConnection(t *testing.T, client *http.Client, entity EntityConfig) *Connection {
+	t.Helper()
+	specPath := filepath.Join(t.TempDir(), "api.yaml")
+	writeTestFile(t, specPath, testParameterizedOpenAPISpec)
+	provider, err := New(Config{
+		SpecFile:   specPath,
+		BaseURL:    "https://api.example.test/v1",
+		HTTPClient: client,
+		Namespace:  "artifacts",
 		Entities:   []EntityConfig{entity},
 	})
 	if err != nil {

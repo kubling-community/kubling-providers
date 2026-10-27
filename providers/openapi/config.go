@@ -57,6 +57,7 @@ type EntityConfig struct {
 	ResponsePath    string
 	PrimaryKey      []string
 	StableKey       *StableKeyConfig
+	PathParameters  []PathParameterConfig
 	QueryParameters []QueryParameterConfig
 	EqualityFilters []EqualityFilterConfig
 	Pagination      *PaginationConfig
@@ -153,6 +154,7 @@ type fileEntityConfig struct {
 	ResponsePath    string                     `yaml:"responsePath"`
 	PrimaryKey      []string                   `yaml:"primaryKey"`
 	StableKey       *fileStableKeyConfig       `yaml:"stableKey"`
+	PathParameters  []filePathParameterConfig  `yaml:"pathParameters"`
 	QueryParameters []fileQueryParameterConfig `yaml:"queryParameters"`
 	EqualityFilters []fileEqualityFilterConfig `yaml:"equalityFilters"`
 	Pagination      *filePaginationConfig      `yaml:"pagination"`
@@ -249,6 +251,7 @@ func loadConfig(path string, requireEntities bool) (Config, error) {
 			ResponsePath:    entity.ResponsePath,
 			PrimaryKey:      append([]string(nil), entity.PrimaryKey...),
 			StableKey:       entity.StableKey.toConfig(),
+			PathParameters:  entity.pathParameters(),
 			QueryParameters: entity.queryParameters(),
 			EqualityFilters: entity.equalityFilters(),
 			Pagination:      entity.Pagination.toConfig(),
@@ -621,6 +624,7 @@ func normalizeEntity(entity EntityConfig) (EntityConfig, error) {
 		ResponsePath:    strings.TrimSpace(entity.ResponsePath),
 		PrimaryKey:      make([]string, 0, len(entity.PrimaryKey)),
 		StableKey:       nil,
+		PathParameters:  make([]PathParameterConfig, 0, len(entity.PathParameters)),
 		QueryParameters: make([]QueryParameterConfig, 0, len(entity.QueryParameters)),
 		EqualityFilters: make([]EqualityFilterConfig, 0, len(entity.EqualityFilters)),
 		Mutations:       &EntityMutationConfig{},
@@ -658,6 +662,11 @@ func normalizeEntity(entity EntityConfig) (EntityConfig, error) {
 		return EntityConfig{}, errors.New("primaryKey and stableKey cannot both be configured")
 	}
 	normalized.StableKey = stableKey
+	pathParameters, err := normalizePathParameters(entity.PathParameters)
+	if err != nil {
+		return EntityConfig{}, err
+	}
+	normalized.PathParameters = pathParameters
 	queryParameters := make(map[string]struct{}, len(entity.QueryParameters))
 	for index, candidate := range entity.QueryParameters {
 		parameter := QueryParameterConfig{
@@ -815,25 +824,11 @@ func normalizeMutationOperation(operation *MutationOperationConfig) (*MutationOp
 			return nil, fmt.Errorf("bodyPath: %w", err)
 		}
 	}
-	pathParameters := make(map[string]struct{}, len(operation.PathParameters))
-	for index, candidate := range operation.PathParameters {
-		parameter := PathParameterConfig{
-			Parameter: strings.TrimSpace(candidate.Parameter),
-			Field:     strings.TrimSpace(candidate.Field),
-			Value:     candidate.Value,
-		}
-		if parameter.Parameter == "" {
-			return nil, fmt.Errorf("pathParameters %d parameter is required", index)
-		}
-		if (parameter.Field == "") == (parameter.Value == "") {
-			return nil, fmt.Errorf("path parameter %q must define exactly one of field or value", parameter.Parameter)
-		}
-		if _, exists := pathParameters[parameter.Parameter]; exists {
-			return nil, fmt.Errorf("duplicate path parameter %q", parameter.Parameter)
-		}
-		pathParameters[parameter.Parameter] = struct{}{}
-		normalized.PathParameters = append(normalized.PathParameters, parameter)
+	pathParameters, err := normalizePathParameters(operation.PathParameters)
+	if err != nil {
+		return nil, err
 	}
+	normalized.PathParameters = pathParameters
 	queryParameters := make(map[string]struct{}, len(operation.QueryParameters))
 	for index, candidate := range operation.QueryParameters {
 		parameter := QueryParameterConfig{Name: strings.TrimSpace(candidate.Name), Value: candidate.Value}
@@ -847,6 +842,42 @@ func normalizeMutationOperation(operation *MutationOperationConfig) (*MutationOp
 		normalized.QueryParameters = append(normalized.QueryParameters, parameter)
 	}
 	return normalized, nil
+}
+
+func normalizePathParameters(parameters []PathParameterConfig) ([]PathParameterConfig, error) {
+	normalized := make([]PathParameterConfig, 0, len(parameters))
+	seen := make(map[string]struct{}, len(parameters))
+	for index, candidate := range parameters {
+		parameter := PathParameterConfig{
+			Parameter: strings.TrimSpace(candidate.Parameter),
+			Field:     strings.TrimSpace(candidate.Field),
+			Value:     candidate.Value,
+		}
+		if parameter.Parameter == "" {
+			return nil, fmt.Errorf("pathParameters %d parameter is required", index)
+		}
+		if (parameter.Field == "") == (parameter.Value == "") {
+			return nil, fmt.Errorf("path parameter %q must define exactly one of field or value", parameter.Parameter)
+		}
+		if _, exists := seen[parameter.Parameter]; exists {
+			return nil, fmt.Errorf("duplicate path parameter %q", parameter.Parameter)
+		}
+		seen[parameter.Parameter] = struct{}{}
+		normalized = append(normalized, parameter)
+	}
+	return normalized, nil
+}
+
+func (entity fileEntityConfig) pathParameters() []PathParameterConfig {
+	parameters := make([]PathParameterConfig, len(entity.PathParameters))
+	for index, parameter := range entity.PathParameters {
+		parameters[index] = PathParameterConfig{
+			Parameter: parameter.Parameter,
+			Field:     parameter.Field,
+			Value:     parameter.Value,
+		}
+	}
+	return parameters
 }
 
 func (entity fileEntityConfig) queryParameters() []QueryParameterConfig {
