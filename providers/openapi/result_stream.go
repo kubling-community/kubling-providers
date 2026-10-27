@@ -3,7 +3,6 @@ package openapi
 import (
 	"context"
 	"io"
-	"net/url"
 	"sync"
 
 	providerv1 "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1"
@@ -18,7 +17,7 @@ type resultStream struct {
 	descriptor  *entityDescriptor
 	projections []queryProjection
 	fields      []*providerv1.Field
-	parameters  url.Values
+	bindings    *requestBindings
 	buffer      []*providerv1.Tuple
 	batchSize   int
 	pagination  paginationState
@@ -43,7 +42,7 @@ func newResultStream(
 	descriptor *entityDescriptor,
 	projections []queryProjection,
 	batchSize int,
-	parameters url.Values,
+	bindings *requestBindings,
 	limit *uint64,
 	offset *uint64,
 ) providersdk.ResultStream {
@@ -73,7 +72,7 @@ func newResultStream(
 		descriptor:  descriptor,
 		projections: projections,
 		fields:      fields,
-		parameters:  cloneURLValues(parameters),
+		bindings:    cloneRequestBindings(bindings),
 		batchSize:   batchSize,
 		pagination:  state,
 		skip:        skip,
@@ -81,14 +80,6 @@ func newResultStream(
 		hasLimit:    hasLimit,
 		done:        hasLimit && remaining == 0,
 	}
-}
-
-func cloneURLValues(values url.Values) url.Values {
-	cloned := make(url.Values, len(values))
-	for name, candidates := range values {
-		cloned[name] = append([]string(nil), candidates...)
-	}
-	return cloned
 }
 
 func (s *resultStream) Next(ctx context.Context) (*providerv1.TupleBatch, error) {
@@ -102,7 +93,7 @@ func (s *resultStream) Next(ctx context.Context) (*providerv1.TupleBatch, error)
 	}
 
 	for len(s.buffer) < s.batchSize && !s.done {
-		rows, done, err := s.connection.fetchPage(ctx, s.descriptor, &s.pagination, s.parameters)
+		rows, done, err := s.connection.fetchPage(ctx, s.descriptor, &s.pagination, s.bindings)
 		if err != nil {
 			s.done = true
 			s.terminalErr = err
@@ -120,7 +111,7 @@ func (s *resultStream) Next(ctx context.Context) (*providerv1.TupleBatch, error)
 				s.done = true
 				break
 			}
-			tuple, err := rowTuple(row, s.projections)
+			tuple, err := rowTuple(row, s.projections, s.bindings.columns)
 			if err != nil {
 				s.done = true
 				s.terminalErr = status.Errorf(codes.Internal, "decode OpenAPI row %d: %v", rowIndex, err)
@@ -169,7 +160,7 @@ func (s *resultStream) Close() error {
 	s.descriptor = nil
 	s.projections = nil
 	s.fields = nil
-	s.parameters = nil
+	s.bindings = nil
 	s.buffer = nil
 	err := s.terminalErr
 	s.mu.Unlock()

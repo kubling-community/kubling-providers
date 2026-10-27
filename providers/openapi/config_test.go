@@ -144,6 +144,37 @@ entities:
 	}
 }
 
+func TestLoadConfigReadsListPathParameterMappings(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "provider.yaml")
+	writeTestFile(t, configPath, `
+specFile: api.yaml
+baseUrl: https://api.example.test
+entities:
+  - name: RELEASE
+    listOperation: listReleases
+    pathParameters:
+      - parameter: owner
+        value: acme
+      - parameter: repository
+        field: repository_name
+`)
+
+	config, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	parameters := config.Entities[0].PathParameters
+	if len(parameters) != 2 {
+		t.Fatalf("LoadConfig() pathParameters = %#v", parameters)
+	}
+	if parameters[0].Parameter != "owner" || parameters[0].Value != "acme" || parameters[0].Field != "" {
+		t.Fatalf("LoadConfig() static path parameter = %#v", parameters[0])
+	}
+	if parameters[1].Parameter != "repository" || parameters[1].Field != "repository_name" || parameters[1].Value != "" {
+		t.Fatalf("LoadConfig() field path parameter = %#v", parameters[1])
+	}
+}
+
 func TestNormalizeConfigDefaultsAndValidatesMaxResponseBytes(t *testing.T) {
 	config := Config{
 		SpecFile:  "api.yaml",
@@ -444,6 +475,40 @@ func TestNormalizeConfigRejectsInvalidEntityMappings(t *testing.T) {
 				},
 			}},
 			want: `query parameter "offset" conflicts with pagination`,
+		},
+		{
+			name: "path parameter without source",
+			entities: []EntityConfig{{
+				Name:           "RELEASE",
+				ListOperation:  "listReleases",
+				PathParameters: []PathParameterConfig{{Parameter: "owner"}},
+			}},
+			want: `path parameter "owner" must define exactly one of field or value`,
+		},
+		{
+			name: "path parameter with two sources",
+			entities: []EntityConfig{{
+				Name:          "RELEASE",
+				ListOperation: "listReleases",
+				PathParameters: []PathParameterConfig{{
+					Parameter: "owner",
+					Field:     "owner",
+					Value:     "acme",
+				}},
+			}},
+			want: `path parameter "owner" must define exactly one of field or value`,
+		},
+		{
+			name: "duplicate path parameter",
+			entities: []EntityConfig{{
+				Name:          "RELEASE",
+				ListOperation: "listReleases",
+				PathParameters: []PathParameterConfig{
+					{Parameter: "owner", Value: "acme"},
+					{Parameter: "owner", Field: "owner"},
+				},
+			}},
+			want: `duplicate path parameter "owner"`,
 		},
 	}
 

@@ -22,7 +22,9 @@ type getOperationInspection struct {
 	operationID        string
 	responseSchema     *base.Schema
 	arrays             []discoveredArray
+	pathParameters     []PathParameterConfig
 	requiredParameters []*v3.Parameter
+	bindingErr         error
 	err                error
 }
 
@@ -51,7 +53,7 @@ func discoverEntities(document *v3.Document, discovery *DiscoveryConfig, explici
 		operation := inspection.operation
 		operationID := inspection.operationID
 		lookupOperation := strings.ToUpper(operationID)
-		if operationID == "" || strings.Contains(operationPath, "{") {
+		if operationID == "" {
 			continue
 		}
 		if _, exists := explicitOperations[lookupOperation]; exists {
@@ -69,9 +71,18 @@ func discoverEntities(document *v3.Document, discovery *DiscoveryConfig, explici
 		if len(includedTags) > 0 && !operationHasTag(operation, includedTags) {
 			continue
 		}
+		if inspection.bindingErr != nil {
+			if _, explicitlyIncluded := includedOperations[lookupOperation]; explicitlyIncluded {
+				return nil, fmt.Errorf("discover operation %q: %w", operationID, inspection.bindingErr)
+			}
+			continue
+		}
 		if len(inspection.requiredParameters) > 0 {
 			if _, explicitlyIncluded := includedOperations[lookupOperation]; explicitlyIncluded {
-				return nil, fmt.Errorf("discover operation %q: required parameters need an explicit entity mapping", operationID)
+				return nil, fmt.Errorf(
+					"discover operation %q: required non-path parameters need an explicit entity mapping",
+					operationID,
+				)
 			}
 			continue
 		}
@@ -88,11 +99,18 @@ func discoverEntities(document *v3.Document, discovery *DiscoveryConfig, explici
 			}
 			continue
 		}
+		if err := validateDiscoveredPathFields(arrays[0], inspection.pathParameters); err != nil {
+			if _, explicitlyIncluded := includedOperations[lookupOperation]; explicitlyIncluded {
+				return nil, fmt.Errorf("discover operation %q: %w", operationID, err)
+			}
+			continue
+		}
 		matchedIncludes[lookupOperation] = struct{}{}
 		entities = append(entities, EntityConfig{
-			Name:          discoveredEntityName(operationID, arrays[0]),
-			ListOperation: operationID,
-			ResponsePath:  arrays[0].responsePath,
+			Name:           discoveredEntityName(operationID, arrays[0]),
+			ListOperation:  operationID,
+			ResponsePath:   arrays[0].responsePath,
+			PathParameters: clonePathParameters(inspection.pathParameters),
 		})
 	}
 
@@ -112,7 +130,11 @@ func inspectGETOperation(operationPath string, pathItem *v3.PathItem) getOperati
 	}
 	inspection.operation = pathItem.Get
 	inspection.operationID = strings.TrimSpace(pathItem.Get.OperationId)
-	inspection.requiredParameters = requiredOperationParameters(pathItem, pathItem.Get)
+	inspection.pathParameters, inspection.requiredParameters, inspection.bindingErr = inspectListRequestBindings(
+		operationPath,
+		pathItem,
+		pathItem.Get,
+	)
 	inspection.responseSchema, inspection.err = successfulJSONResponseSchema(pathItem.Get)
 	if inspection.err != nil {
 		return inspection
@@ -123,6 +145,138 @@ func inspectGETOperation(operationPath string, pathItem *v3.PathItem) getOperati
 		make(map[*base.Schema]bool),
 	)
 	return inspection
+}
+
+func inspectListRequestBindings(
+	operationPath string,
+	pathItem *v3.PathItem,
+	operation *v3.Operation,
+) ([]PathParameterConfig, []*v3.Parameter, error) {
+	parameters, err := effectiveOperationParameters(pathItem, operation)
+	if err != nil {
+		return nil, nil, err
+	}
+	declaredPath := make(map[string]*v3.Parameter)
+	var requiredNonPath []*v3.Parameter
+	for _, parameter := range parameters {
+		location := strings.ToLower(strings.TrimSpace(parameter.In))
+		if location == "path" {
+			declaredPath[strings.TrimSpace(parameter.Name)] = parameter
+			continue
+		}
+		if parameter.Required != nil && *parameter.Required {
+			requiredNonPath = append(requiredNonPath, parameter)
+		}
+	}
+
+	names, err := operationPathParameterNames(operationPath)
+	if err != nil {
+		return nil, nil, err
+	}
+	bindings := make([]PathParameterConfig, 0, len(names))
+	seen := make(map[string]struct{}, len(names))
+	fields := make(map[string]string, len(names))
+	for _, name := range names {
+		if _, exists := seen[name]; exists {
+			continue
+		}
+		parameter := declaredPath[name]
+		if parameter == nil {
+			return nil, nil, fmt.Errorf(
+				"path parameter %q is present in operation path %q but is not defined",
+				name,
+				operationPath,
+			)
+		}
+		if err := validatePathParameter(parameter); err != nil {
+			return nil, nil, fmt.Errorf("path parameter %q: %w", name, err)
+		}
+		lookupField := strings.ToUpper(name)
+		if existing := fields[lookupField]; existing != "" && existing != name {
+			return nil, nil, fmt.Errorf(
+				"path parameters %q and %q cannot be represented as distinct case-insensitive fields",
+				existing,
+				name,
+			)
+		}
+		seen[name] = struct{}{}
+		fields[lookupField] = name
+		bindings = append(bindings, PathParameterConfig{Parameter: name, Field: name})
+	}
+
+	undeclared := make([]string, 0)
+	for name := range declaredPath {
+		if _, exists := seen[name]; !exists {
+			undeclared = append(undeclared, name)
+		}
+	}
+	if len(undeclared) > 0 {
+		sort.Strings(undeclared)
+		return nil, nil, fmt.Errorf(
+			"path parameter %q is defined but is not present in operation path %q",
+			undeclared[0],
+			operationPath,
+		)
+	}
+	return bindings, requiredNonPath, nil
+}
+
+func operationPathParameterNames(operationPath string) ([]string, error) {
+	var names []string
+	for position := 0; position < len(operationPath); {
+		openOffset := strings.IndexByte(operationPath[position:], '{')
+		if openOffset < 0 {
+			if strings.Contains(operationPath[position:], "}") {
+				return nil, fmt.Errorf("operation path %q contains an unmatched }", operationPath)
+			}
+			break
+		}
+		open := position + openOffset
+		if strings.Contains(operationPath[position:open], "}") {
+			return nil, fmt.Errorf("operation path %q contains an unmatched }", operationPath)
+		}
+		closeOffset := strings.IndexByte(operationPath[open+1:], '}')
+		if closeOffset < 0 {
+			return nil, fmt.Errorf("operation path %q contains an unclosed path parameter", operationPath)
+		}
+		close := open + 1 + closeOffset
+		name := operationPath[open+1 : close]
+		if name == "" || strings.ContainsAny(name, "{}/") {
+			return nil, fmt.Errorf("operation path %q contains invalid path parameter %q", operationPath, name)
+		}
+		names = append(names, name)
+		position = close + 1
+	}
+	return names, nil
+}
+
+func validateDiscoveredPathFields(candidate discoveredArray, bindings []PathParameterConfig) error {
+	if len(bindings) == 0 {
+		return nil
+	}
+	rowSchema := candidate.itemSchema.Schema()
+	if rowSchema == nil {
+		return fmt.Errorf("build array item schema: %w", candidate.itemSchema.GetBuildError())
+	}
+	properties, _, err := objectShape(rowSchema, make(map[*base.Schema]bool))
+	if err != nil {
+		return err
+	}
+	responseFields := make(map[string]string, len(properties))
+	for name := range properties {
+		responseFields[strings.ToUpper(name)] = name
+	}
+	for _, binding := range bindings {
+		if responseField := responseFields[strings.ToUpper(binding.Field)]; responseField != "" {
+			return fmt.Errorf(
+				"path parameter %q would share field %q with response property %q; use an explicit entity mapping",
+				binding.Parameter,
+				binding.Field,
+				responseField,
+			)
+		}
+	}
+	return nil
 }
 
 func discoverObjectArrays(schema *base.Schema, pointer string, visiting map[*base.Schema]bool) ([]discoveredArray, error) {
@@ -236,12 +390,6 @@ func operationHasTag(operation *v3.Operation, included map[string]struct{}) bool
 	return false
 }
 
-func requiredOperationParameters(pathItem *v3.PathItem, operation *v3.Operation) []*v3.Parameter {
-	var required []*v3.Parameter
-	for _, parameter := range append(append([]*v3.Parameter(nil), pathItem.Parameters...), operation.Parameters...) {
-		if parameter != nil && parameter.Required != nil && *parameter.Required {
-			required = append(required, parameter)
-		}
-	}
-	return required
+func clonePathParameters(parameters []PathParameterConfig) []PathParameterConfig {
+	return append([]PathParameterConfig(nil), parameters...)
 }

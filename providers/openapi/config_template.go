@@ -23,8 +23,14 @@ type configTemplateEntity struct {
 	ListOperation   string                         `yaml:"listOperation"`
 	ResponsePath    string                         `yaml:"responsePath,omitempty"`
 	PrimaryKey      []string                       `yaml:"primaryKey"`
+	PathParameters  []configTemplatePathParameter  `yaml:"pathParameters,omitempty"`
 	QueryParameters []configTemplateQueryParameter `yaml:"queryParameters,omitempty"`
 	Pagination      *configTemplatePagination      `yaml:"pagination,omitempty"`
+}
+
+type configTemplatePathParameter struct {
+	Parameter string `yaml:"parameter"`
+	Field     string `yaml:"field"`
 }
 
 type configTemplateQueryParameter struct {
@@ -82,8 +88,8 @@ func inspectConfigTemplate(document *v3.Document) ([]configTemplateCandidate, []
 			diagnostics = append(diagnostics, operationLabel+": operationId is required")
 			continue
 		}
-		if strings.Contains(operationPath, "{") {
-			diagnostics = append(diagnostics, operationLabel+": path parameters are not supported by list entities")
+		if inspection.bindingErr != nil {
+			diagnostics = append(diagnostics, operationLabel+": "+inspection.bindingErr.Error())
 			continue
 		}
 		if inspection.err != nil {
@@ -101,15 +107,23 @@ func inspectConfigTemplate(document *v3.Document) ([]configTemplateCandidate, []
 		}
 		pagination := inferTemplatePagination(inspection)
 		for _, array := range inspection.arrays {
+			if err := validateDiscoveredPathFields(array, inspection.pathParameters); err != nil {
+				diagnostics = append(diagnostics, operationLabel+": "+err.Error())
+				continue
+			}
 			entity := EntityConfig{
 				Name:            discoveredEntityName(inspection.operationID, array),
 				ListOperation:   inspection.operationID,
 				ResponsePath:    array.responsePath,
 				PrimaryKey:      []string{},
+				PathParameters:  clonePathParameters(inspection.pathParameters),
 				QueryParameters: cloneQueryParameters(queryParameters),
 				Pagination:      clonePagination(pagination),
 			}
 			comment := fmt.Sprintf("Detected from GET %s. Review primaryKey", operationPath)
+			if len(inspection.pathParameters) > 0 {
+				comment += " and path parameter field names"
+			}
 			if len(queryParameters) > 0 {
 				comment += " and required parameter placeholders"
 			}
@@ -290,6 +304,13 @@ func renderConfigTemplate(
 	}
 	entities := make([]configTemplateEntity, len(candidates))
 	for index, candidate := range candidates {
+		pathParameters := make([]configTemplatePathParameter, len(candidate.entity.PathParameters))
+		for parameterIndex, parameter := range candidate.entity.PathParameters {
+			pathParameters[parameterIndex] = configTemplatePathParameter{
+				Parameter: parameter.Parameter,
+				Field:     parameter.Field,
+			}
+		}
 		queryParameters := make([]configTemplateQueryParameter, len(candidate.entity.QueryParameters))
 		for parameterIndex, parameter := range candidate.entity.QueryParameters {
 			queryParameters[parameterIndex] = configTemplateQueryParameter{Name: parameter.Name, Value: parameter.Value}
@@ -310,6 +331,7 @@ func renderConfigTemplate(
 			ListOperation:   candidate.entity.ListOperation,
 			ResponsePath:    candidate.entity.ResponsePath,
 			PrimaryKey:      []string{},
+			PathParameters:  pathParameters,
 			QueryParameters: queryParameters,
 			Pagination:      pagination,
 		}
@@ -320,7 +342,7 @@ func renderConfigTemplate(
 	}
 	comments := []string{
 		"Generated from the OpenAPI document. Review entity names, primary keys,",
-		"required parameter placeholders, pagination and mutation semantics before use.",
+		"request bindings, pagination and mutation semantics before use.",
 	}
 	for _, diagnostic := range diagnostics {
 		comments = append(comments, "Skipped: "+diagnostic)

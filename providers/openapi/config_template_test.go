@@ -32,14 +32,18 @@ headers:
 		"name: PROJECT",
 		"name: ISSUE",
 		"name: WARNING",
+		"name: PROJECT_MEMBER",
 		"listOperation: getUsage",
+		"listOperation: listProjectMembers",
+		"parameter: project_id",
+		"field: project_id",
 		"value: ${OPENAPI_GET_USAGE_START_TIME}",
 		"mode: CURSOR",
 		"pageSizeParameter: limit",
 		"cursorParameter: after",
 		"nextCursorPath: /last_id",
 		"hasMorePath: /has_more",
-		"Skipped: getProject: path parameters are not supported by list entities",
+		"Skipped: getProject: successful JSON response contains no object arrays",
 		"Skipped: health: successful JSON response contains no object arrays",
 	} {
 		if !strings.Contains(content, expected) {
@@ -61,8 +65,8 @@ headers:
 	if err != nil {
 		t.Fatalf("New(generated) error = %v", err)
 	}
-	if len(provider.catalog.entities) != 4 {
-		t.Fatalf("generated entity count = %d, want 4", len(provider.catalog.entities))
+	if len(provider.catalog.entities) != 5 {
+		t.Fatalf("generated entity count = %d, want 5", len(provider.catalog.entities))
 	}
 }
 
@@ -189,6 +193,24 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Project"
+  /projects/{project_id}/members:
+    get:
+      operationId: listProjectMembers
+      parameters:
+        - name: project_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Project members.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProjectMember"
   /health:
     get:
       operationId: health
@@ -218,5 +240,10 @@ components:
       type: object
       properties:
         code:
+          type: string
+    ProjectMember:
+      type: object
+      properties:
+        id:
           type: string
 `

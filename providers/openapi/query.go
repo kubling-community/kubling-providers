@@ -47,9 +47,13 @@ func (c *Connection) Query(ctx context.Context, request *providerv1.QueryRequest
 	if err != nil {
 		return nil, err
 	}
-	parameters, err := planQueryParameters(descriptor, request.GetFilter())
+	bindings, err := planQueryBindings(descriptor, request.GetFilter())
 	if err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "plan OpenAPI filter: %v", err)
+	}
+	bindings.endpoint, err = operationURLWithParameters(c.provider.config.BaseURL, descriptor.path, bindings.path)
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "build OpenAPI request URL: %v", err)
 	}
 	projections, err := planQueryProjections(descriptor.table, request.GetProjections())
 	if err != nil {
@@ -60,7 +64,7 @@ func (c *Connection) Query(ctx context.Context, request *providerv1.QueryRequest
 		descriptor,
 		projections,
 		queryBatchSize(request.BatchSize),
-		parameters,
+		bindings,
 		request.Limit,
 		request.Offset,
 	), nil
@@ -139,16 +143,12 @@ func (c *Connection) fetchPage(
 	ctx context.Context,
 	descriptor *entityDescriptor,
 	state *paginationState,
-	parameters url.Values,
+	bindings *requestBindings,
 ) ([]map[string]any, bool, error) {
 	if err := c.ensureOpen(); err != nil {
 		return nil, false, err
 	}
-	endpoint, err := operationURL(c.provider.config.BaseURL, descriptor.path)
-	if err != nil {
-		return nil, false, status.Errorf(codes.Internal, "build OpenAPI request URL: %v", err)
-	}
-	endpoint, err = queryParameterizedURL(endpoint, parameters)
+	endpoint, err := queryParameterizedURL(bindings.endpoint, bindings.query)
 	if err != nil {
 		return nil, false, status.Errorf(codes.Internal, "build OpenAPI query parameters: %v", err)
 	}
@@ -365,25 +365,6 @@ func cursorToken(raw any) (string, bool, error) {
 	}
 }
 
-func operationURL(baseURL, operationPath string) (string, error) {
-	if strings.Contains(operationPath, "{") {
-		return "", fmt.Errorf("path parameters are not supported in list operation path %q", operationPath)
-	}
-	base, err := url.Parse(strings.TrimRight(baseURL, "/") + "/")
-	if err != nil {
-		return "", err
-	}
-	reference, err := url.Parse(strings.TrimLeft(operationPath, "/"))
-	if err != nil {
-		return "", err
-	}
-	resolved := base.ResolveReference(reference)
-	if !sameOrigin(base, resolved) {
-		return "", fmt.Errorf("operation path %q changed datasource origin", operationPath)
-	}
-	return resolved.String(), nil
-}
-
 func valueAtJSONPointer(document any, pointer string) (any, error) {
 	value, found, err := optionalValueAtJSONPointer(document, pointer)
 	if err != nil {
@@ -416,7 +397,11 @@ func optionalValueAtJSONPointer(document any, pointer string) (any, bool, error)
 	return current, true, nil
 }
 
-func rowTuple(row map[string]any, projections []queryProjection) (*providerv1.Tuple, error) {
+func rowTuple(
+	row map[string]any,
+	projections []queryProjection,
+	bindingValues map[string]*kublingv1.Value,
+) (*providerv1.Tuple, error) {
 	values := make([]*kublingv1.Value, 0, len(projections))
 	for _, projection := range projections {
 		if projection.literal != nil {
@@ -425,6 +410,10 @@ func rowTuple(row map[string]any, projections []queryProjection) (*providerv1.Tu
 		}
 		raw, exists := row[projection.column.GetSourceName()]
 		if !exists || raw == nil {
+			if bound := bindingValues[strings.ToUpper(projection.column.GetName())]; bound != nil {
+				values = append(values, proto.Clone(bound).(*kublingv1.Value))
+				continue
+			}
 			if !projection.column.GetNullable() {
 				return nil, fmt.Errorf("required property %q is missing or null", projection.column.GetSourceName())
 			}

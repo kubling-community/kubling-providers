@@ -22,17 +22,32 @@ type catalog struct {
 }
 
 type entityDescriptor struct {
-	config           EntityConfig
-	path             string
-	operation        *v3.Operation
-	queryParameters  map[string]*v3.Parameter
-	equalityFilters  map[string]string
-	requiredBindings map[string]string
-	rowSchema        *base.Schema
-	table            *providerv1.TableMetadata
-	insert           *mutationDescriptor
-	update           *mutationDescriptor
-	delete           *mutationDescriptor
+	config            EntityConfig
+	path              string
+	operation         *v3.Operation
+	pathParameters    map[string]*v3.Parameter
+	queryParameters   map[string]*v3.Parameter
+	parameterBindings []*listParameterBinding
+	rowSchema         *base.Schema
+	table             *providerv1.TableMetadata
+	insert            *mutationDescriptor
+	update            *mutationDescriptor
+	delete            *mutationDescriptor
+}
+
+type parameterLocation string
+
+const (
+	parameterLocationPath  parameterLocation = "path"
+	parameterLocationQuery parameterLocation = "query"
+)
+
+type listParameterBinding struct {
+	location   parameterLocation
+	parameter  string
+	field      string
+	definition *v3.Parameter
+	required   bool
 }
 
 type mutationDescriptor struct {
@@ -130,7 +145,7 @@ func describeEntity(document *v3.Document, config EntityConfig) (*entityDescript
 	if err != nil {
 		return nil, err
 	}
-	queryParameters, err := operationQueryParameters(pathItem, operation)
+	pathParameters, queryParameters, err := operationParameters(pathItem, operation)
 	if err != nil {
 		return nil, err
 	}
@@ -150,15 +165,15 @@ func describeEntity(document *v3.Document, config EntityConfig) (*entityDescript
 		return nil, fmt.Errorf("response row schema: %w", err)
 	}
 	descriptor := &entityDescriptor{
-		config:           config,
-		path:             path,
-		operation:        operation,
-		queryParameters:  queryParameters,
-		equalityFilters:  make(map[string]string, len(config.EqualityFilters)),
-		requiredBindings: make(map[string]string),
-		rowSchema:        rowSchema,
+		config:            config,
+		path:              path,
+		operation:         operation,
+		pathParameters:    pathParameters,
+		queryParameters:   queryParameters,
+		parameterBindings: make([]*listParameterBinding, 0, len(config.PathParameters)+len(config.EqualityFilters)),
+		rowSchema:         rowSchema,
 	}
-	if err := descriptor.validateQueryBindings(); err != nil {
+	if err := descriptor.validateListBindings(); err != nil {
 		return nil, err
 	}
 	if err := descriptor.describeMutations(document); err != nil {
@@ -287,6 +302,24 @@ func findOperation(document *v3.Document, operationID string) (string, string, *
 func operationParameters(pathItem *v3.PathItem, operation *v3.Operation) (map[string]*v3.Parameter, map[string]*v3.Parameter, error) {
 	pathParameters := make(map[string]*v3.Parameter)
 	queryParameters := make(map[string]*v3.Parameter)
+	parameters, err := effectiveOperationParameters(pathItem, operation)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, parameter := range parameters {
+		switch strings.ToLower(strings.TrimSpace(parameter.In)) {
+		case "path":
+			pathParameters[strings.TrimSpace(parameter.Name)] = parameter
+		case "query":
+			queryParameters[strings.TrimSpace(parameter.Name)] = parameter
+		}
+	}
+	return pathParameters, queryParameters, nil
+}
+
+func effectiveOperationParameters(pathItem *v3.PathItem, operation *v3.Operation) ([]*v3.Parameter, error) {
+	parameters := make([]*v3.Parameter, 0)
+	indexes := make(map[string]int)
 	add := func(parameter *v3.Parameter) error {
 		if parameter == nil {
 			return errors.New("operation contains an empty parameter")
@@ -296,29 +329,30 @@ func operationParameters(pathItem *v3.PathItem, operation *v3.Operation) (map[st
 		if name == "" || location == "" {
 			return errors.New("operation contains a parameter without name or location")
 		}
-		switch location {
-		case "path":
-			pathParameters[name] = parameter
-		case "query":
-			queryParameters[name] = parameter
+		key := location + "\x00" + name
+		if index, exists := indexes[key]; exists {
+			parameters[index] = parameter
+			return nil
 		}
+		indexes[key] = len(parameters)
+		parameters = append(parameters, parameter)
 		return nil
 	}
 	if pathItem != nil {
 		for _, parameter := range pathItem.Parameters {
 			if err := add(parameter); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 		}
 	}
 	if operation != nil {
 		for _, parameter := range operation.Parameters {
 			if err := add(parameter); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 		}
 	}
-	return pathParameters, queryParameters, nil
+	return parameters, nil
 }
 
 func (descriptor *mutationDescriptor) validateBindings() error {
@@ -330,7 +364,7 @@ func (descriptor *mutationDescriptor) validateBindings() error {
 		if parameter == nil {
 			return fmt.Errorf("path parameter %q is not defined by the operation", binding.Parameter)
 		}
-		if err := validateMutationPathParameter(parameter); err != nil {
+		if err := validatePathParameter(parameter); err != nil {
 			return fmt.Errorf("path parameter %q: %w", binding.Parameter, err)
 		}
 		if !strings.Contains(descriptor.path, "{"+binding.Parameter+"}") {
@@ -369,7 +403,7 @@ func (descriptor *mutationDescriptor) validateBindings() error {
 	return nil
 }
 
-func validateMutationPathParameter(parameter *v3.Parameter) error {
+func validatePathParameter(parameter *v3.Parameter) error {
 	if parameter.Required == nil || !*parameter.Required {
 		return errors.New("must be required")
 	}
@@ -429,39 +463,40 @@ func findGETOperation(document *v3.Document, operationID string) (string, *v3.Pa
 }
 
 func operationQueryParameters(pathItem *v3.PathItem, operation *v3.Operation) (map[string]*v3.Parameter, error) {
-	parameters := make(map[string]*v3.Parameter)
-	add := func(parameter *v3.Parameter) error {
-		if parameter == nil {
-			return errors.New("list operation contains an empty parameter")
-		}
-		name := strings.TrimSpace(parameter.Name)
-		location := strings.ToLower(strings.TrimSpace(parameter.In))
-		if name == "" || location == "" {
-			return errors.New("list operation contains a parameter without name or location")
-		}
-		if location == "query" {
-			parameters[name] = parameter
-		}
-		return nil
-	}
-	if pathItem != nil {
-		for _, parameter := range pathItem.Parameters {
-			if err := add(parameter); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if operation != nil {
-		for _, parameter := range operation.Parameters {
-			if err := add(parameter); err != nil {
-				return nil, err
-			}
-		}
-	}
-	return parameters, nil
+	_, queryParameters, err := operationParameters(pathItem, operation)
+	return queryParameters, err
 }
 
-func (descriptor *entityDescriptor) validateQueryBindings() error {
+func (descriptor *entityDescriptor) validateListBindings() error {
+	configuredPath := make(map[string]struct{}, len(descriptor.config.PathParameters))
+	for _, configured := range descriptor.config.PathParameters {
+		parameter := descriptor.pathParameters[configured.Parameter]
+		if parameter == nil {
+			return fmt.Errorf("path parameter %q is not defined by the list operation", configured.Parameter)
+		}
+		if err := validatePathParameter(parameter); err != nil {
+			return fmt.Errorf("path parameter %q: %w", configured.Parameter, err)
+		}
+		if !strings.Contains(descriptor.path, "{"+configured.Parameter+"}") {
+			return fmt.Errorf("path parameter %q is not present in list operation path %q", configured.Parameter, descriptor.path)
+		}
+		configuredPath[configured.Parameter] = struct{}{}
+		if configured.Field != "" {
+			descriptor.parameterBindings = append(descriptor.parameterBindings, &listParameterBinding{
+				location:   parameterLocationPath,
+				parameter:  configured.Parameter,
+				field:      configured.Field,
+				definition: parameter,
+				required:   true,
+			})
+		}
+	}
+	for name := range descriptor.pathParameters {
+		if _, exists := configuredPath[name]; !exists {
+			return fmt.Errorf("path parameter %q has no field or static binding", name)
+		}
+	}
+
 	bound := make(map[string]string)
 	for _, configured := range descriptor.config.QueryParameters {
 		if descriptor.queryParameters[configured.Name] == nil {
@@ -477,8 +512,14 @@ func (descriptor *entityDescriptor) validateQueryBindings() error {
 		if err := validateEqualityParameter(parameter); err != nil {
 			return fmt.Errorf("equality filter parameter %q: %w", configured.Parameter, err)
 		}
-		descriptor.equalityFilters[strings.ToUpper(configured.Field)] = configured.Parameter
 		bound[configured.Parameter] = configured.Field
+		descriptor.parameterBindings = append(descriptor.parameterBindings, &listParameterBinding{
+			location:   parameterLocationQuery,
+			parameter:  configured.Parameter,
+			field:      configured.Field,
+			definition: parameter,
+			required:   parameter.Required != nil && *parameter.Required,
+		})
 	}
 	if pagination := descriptor.config.Pagination; pagination != nil {
 		for _, name := range paginationParameterNames(pagination) {
@@ -492,8 +533,6 @@ func (descriptor *entityDescriptor) validateQueryBindings() error {
 		if parameter.Required != nil && *parameter.Required {
 			if binding := bound[name]; binding == "" {
 				return fmt.Errorf("required query parameter %q has no static, filter or pagination binding", name)
-			} else if binding != "static" && binding != "pagination" {
-				descriptor.requiredBindings[name] = binding
 			}
 		}
 	}
@@ -729,12 +768,9 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 		columnsByName[name] = column
 		columnsByLookupName[strings.ToUpper(name)] = column
 	}
-	for _, filter := range descriptor.config.EqualityFilters {
-		column := columnsByLookupName[strings.ToUpper(filter.Field)]
-		if column == nil {
-			return nil, fmt.Errorf("equality filter field %q is not present in the response row schema", filter.Field)
-		}
-		column.Searchability = providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_EQUALITY
+	columns, err = applyListParameterMetadata(descriptor, columns, columnsByName, columnsByLookupName)
+	if err != nil {
+		return nil, err
 	}
 
 	keys := make([]*providerv1.KeyMetadata, 0, 1)
@@ -742,7 +778,7 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 		for _, field := range descriptor.config.PrimaryKey {
 			column := columnsByName[field]
 			if column == nil {
-				return nil, fmt.Errorf("primaryKey field %q is not present in the response row schema", field)
+				return nil, fmt.Errorf("primaryKey field %q is not present in the table schema", field)
 			}
 			column.Nullable = new(false)
 		}
@@ -779,15 +815,16 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 		}
 	}
 	table := &providerv1.TableMetadata{
-		Name:       descriptor.config.Name,
-		SourceName: descriptor.operation.OperationId,
-		Kind:       providerv1.TableKind_TABLE_KIND_TABLE,
-		Columns:    columns,
-		Keys:       keys,
-		Updatable:  &updatable,
-		Annotation: annotation,
-		Namespace:  namespace,
-		Properties: tableProperties,
+		Name:           descriptor.config.Name,
+		SourceName:     descriptor.operation.OperationId,
+		Kind:           providerv1.TableKind_TABLE_KIND_TABLE,
+		Columns:        columns,
+		Keys:           keys,
+		Updatable:      &updatable,
+		Annotation:     annotation,
+		Namespace:      namespace,
+		Properties:     tableProperties,
+		AccessPatterns: requiredBindingAccessPatterns(descriptor, columnsByLookupName),
 	}
 	if stableKey := descriptor.config.StableKey; stableKey != nil {
 		if err := providersdk.AddStablePrimaryKey(table, stableKey.Name, stableKey.Columns...); err != nil {
@@ -795,6 +832,88 @@ func tableMetadata(namespace string, descriptor *entityDescriptor) (*providerv1.
 		}
 	}
 	return table, nil
+}
+
+func applyListParameterMetadata(
+	descriptor *entityDescriptor,
+	columns []*providerv1.ColumnMetadata,
+	columnsByName map[string]*providerv1.ColumnMetadata,
+	columnsByLookupName map[string]*providerv1.ColumnMetadata,
+) ([]*providerv1.ColumnMetadata, error) {
+	for _, binding := range descriptor.parameterBindings {
+		bindingColumn, err := columnMetadata(binding.field, binding.definition.Schema, binding.required)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"%s parameter %q field %q: %w",
+				binding.location,
+				binding.parameter,
+				binding.field,
+				err,
+			)
+		}
+		lookupName := strings.ToUpper(binding.field)
+		column := columnsByLookupName[lookupName]
+		if column == nil {
+			column = bindingColumn
+			if binding.definition.Description != "" {
+				column.Annotation = binding.definition.Description
+			}
+			columns = append(columns, column)
+			columnsByName[column.Name] = column
+			columnsByLookupName[lookupName] = column
+		} else if column.GetType() != bindingColumn.GetType() {
+			return nil, fmt.Errorf(
+				"%s parameter %q field %q has type %s, incompatible with column type %s",
+				binding.location,
+				binding.parameter,
+				binding.field,
+				bindingColumn.GetType(),
+				column.GetType(),
+			)
+		}
+		column.Searchability = providerv1.ColumnSearchability_COLUMN_SEARCHABILITY_EQUALITY
+		if binding.required {
+			column.Nullable = new(false)
+		}
+		if column.Properties == nil {
+			column.Properties = make(map[string]string)
+		}
+		bindingName := string(binding.location) + ":" + binding.parameter
+		if existing := column.Properties["openapi.parameter_bindings"]; existing == "" {
+			column.Properties["openapi.parameter_bindings"] = bindingName
+		} else if !slices.Contains(strings.Split(existing, ","), bindingName) {
+			column.Properties["openapi.parameter_bindings"] = existing + "," + bindingName
+		}
+	}
+	return columns, nil
+}
+
+func requiredBindingAccessPatterns(
+	descriptor *entityDescriptor,
+	columns map[string]*providerv1.ColumnMetadata,
+) []*providerv1.AccessPatternMetadata {
+	requiredColumns := make([]string, 0, len(descriptor.parameterBindings))
+	seen := make(map[string]struct{}, len(descriptor.parameterBindings))
+	for _, binding := range descriptor.parameterBindings {
+		if !binding.required {
+			continue
+		}
+		lookupName := strings.ToUpper(binding.field)
+		if _, exists := seen[lookupName]; exists {
+			continue
+		}
+		seen[lookupName] = struct{}{}
+		if column := columns[lookupName]; column != nil {
+			requiredColumns = append(requiredColumns, column.GetName())
+		}
+	}
+	if len(requiredColumns) == 0 {
+		return nil
+	}
+	return []*providerv1.AccessPatternMetadata{{
+		Name:    "AP_" + strings.ToUpper(descriptor.config.Name) + "_REQUIRED_BINDINGS",
+		Columns: requiredColumns,
+	}}
 }
 
 func applyMutationMetadata(
@@ -828,7 +947,7 @@ func applyMutationMetadata(
 			}
 			column := columns[strings.ToUpper(binding.Field)]
 			if column == nil {
-				return fmt.Errorf("%s mutation path field %q is not present in the response row schema", strings.ToLower(mutation.method), binding.Field)
+				return fmt.Errorf("%s mutation path field %q is not present in the table schema", strings.ToLower(mutation.method), binding.Field)
 			}
 			if mutation == descriptor.insert {
 				writable[strings.ToUpper(column.GetName())] = true
