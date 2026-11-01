@@ -17,8 +17,12 @@ session history.
 ## Run the provider
 
 The Agent Gateway requires TLS and one bearer-token file per fleet namespace.
-Tokens must contain at least 32 non-whitespace characters. Mounted certificate,
-key and token files must be readable by the container's non-root user.
+Tokens must contain at least 32 non-whitespace characters.
+
+### Container
+
+Mounted certificate, key and token files must be readable by the container's
+non-root user.
 
 ```sh
 docker run --rm \
@@ -37,6 +41,24 @@ docker run --rm \
 Pin an exact image tag in production. Register port `50051` as a Kubling gRPC
 provider endpoint using the public [provider configuration
 documentation](https://docs.kubling.com/providers).
+
+### Debian package
+
+Configure the Kubling APT repository using the
+[Debian installation guide](https://docs.kubling.com/install/debian), then
+install the provider with:
+
+```sh
+sudo apt install kubling-host-provider
+```
+
+The provider package installs the binary and documentation. It does not install
+or start a service; configure its environment and lifecycle with the service
+manager used by the deployment. Before running it as a non-root account, create
+the configured state directory and grant that account write access. The TLS key
+and namespace token files must also be readable by that account.
+
+### Provider settings
 
 The main provider controls are:
 
@@ -76,12 +98,11 @@ fails the scan.
 
 ## Install an agent
 
-Configure the public `kubling/bin` APT repository, then install the package:
+Configure the Kubling APT repository using the
+[Debian installation guide](https://docs.kubling.com/install/debian), then
+install the agent with:
 
 ```sh
-curl -sLf \
-  'https://dl.cloudsmith.io/public/kubling/bin/cfg/setup/bash.deb.sh' \
-  | sudo bash
 sudo apt install kubling-host-agent
 ```
 

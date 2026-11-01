@@ -67,10 +67,10 @@ identities, relationship bindings and gRPC delivery.
 
 ## Deploy
 
-The provider is distributed as `docker.io/kubling/host-provider`. Host agents
-are distributed as Linux binaries and Debian packages because they normally run
-on the observed host itself, outside a container, with access to its real
-process and mount namespaces.
+The provider is distributed as `docker.io/kubling/host-provider` and as a
+Debian package. Host agents are distributed as Linux binaries and Debian
+packages because they normally run on the observed host itself, outside a
+container, with access to its real process and mount namespaces.
 
 See the [deployment guide](docs/deployment.md) for network, TLS, namespace,
 container and systemd configuration. Compatibility with Kubling releases is
