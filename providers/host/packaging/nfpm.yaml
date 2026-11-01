@@ -32,6 +32,10 @@ contents:
     dst: /usr/share/doc/kubling-host-agent/README.md
     file_info:
       mode: 0644
+  - src: docs/deployment.md
+    dst: /usr/share/doc/kubling-host-agent/docs/deployment.md
+    file_info:
+      mode: 0644
   - src: ../../LICENSE
     dst: /usr/share/doc/kubling-host-agent/copyright
     file_info:
