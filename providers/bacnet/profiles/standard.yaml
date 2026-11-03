@@ -1,0 +1,355 @@
+apiVersion: kubling.io/bacnet-profile/v1
+id: bacnet-standard
+
+objectTypes:
+  - id: 0
+    name: analog-input
+  - id: 1
+    name: analog-output
+  - id: 2
+    name: analog-value
+  - id: 3
+    name: binary-input
+  - id: 4
+    name: binary-output
+  - id: 5
+    name: binary-value
+  - id: 8
+    name: device
+  - id: 13
+    name: multi-state-input
+  - id: 14
+    name: multi-state-output
+  - id: 19
+    name: multi-state-value
+
+tables:
+  - name: OBJECTS
+    allObjectTypes: true
+    columns:
+      - name: object_identifier
+        property:
+          id: 75
+          name: object-identifier
+        bacnetType: object-identifier
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_name
+        property:
+          id: 77
+          name: object-name
+        bacnetType: character-string
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_type
+        property:
+          id: 79
+          name: object-type
+        bacnetType: enumerated
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: description
+        property:
+          id: 28
+          name: description
+        bacnetType: character-string
+        kublingType: STRING
+
+  - name: DEVICE_OBJECTS
+    objectTypes:
+      - device
+    columns:
+      - name: object_identifier
+        property:
+          id: 75
+          name: object-identifier
+        bacnetType: object-identifier
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_name
+        property:
+          id: 77
+          name: object-name
+        bacnetType: character-string
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: vendor_identifier
+        property:
+          id: 120
+          name: vendor-identifier
+        bacnetType: unsigned
+        kublingType: INTEGER
+      - name: vendor_name
+        property:
+          id: 121
+          name: vendor-name
+        bacnetType: character-string
+        kublingType: STRING
+      - name: model_name
+        property:
+          id: 70
+          name: model-name
+        bacnetType: character-string
+        kublingType: STRING
+      - name: firmware_revision
+        property:
+          id: 44
+          name: firmware-revision
+        bacnetType: character-string
+        kublingType: STRING
+      - name: application_software_version
+        property:
+          id: 12
+          name: application-software-version
+        bacnetType: character-string
+        kublingType: STRING
+      - name: protocol_version
+        property:
+          id: 98
+          name: protocol-version
+        bacnetType: unsigned
+        kublingType: INTEGER
+      - name: protocol_revision
+        property:
+          id: 139
+          name: protocol-revision
+        bacnetType: unsigned
+        kublingType: INTEGER
+      - name: max_apdu_length_accepted
+        property:
+          id: 62
+          name: max-apdu-length-accepted
+        bacnetType: unsigned
+        kublingType: INTEGER
+      - name: segmentation_supported
+        property:
+          id: 107
+          name: segmentation-supported
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: system_status
+        property:
+          id: 112
+          name: system-status
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: object_list
+        property:
+          id: 76
+          name: object-list
+        bacnetType: object-identifier
+        kublingType: STRING
+        array: true
+
+  - name: ANALOG_POINTS
+    objectTypes:
+      - analog-input
+      - analog-output
+      - analog-value
+    columns:
+      - name: object_identifier
+        property:
+          id: 75
+          name: object-identifier
+        bacnetType: object-identifier
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_name
+        property:
+          id: 77
+          name: object-name
+        bacnetType: character-string
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: description
+        property:
+          id: 28
+          name: description
+        bacnetType: character-string
+        kublingType: STRING
+      - name: present_value
+        property:
+          id: 85
+          name: present-value
+        bacnetType: real
+        kublingType: DOUBLE
+        write:
+          commandable: true
+          objectTypes:
+            - analog-output
+            - analog-value
+      - name: units
+        property:
+          id: 117
+          name: units
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: status_flags
+        property:
+          id: 111
+          name: status-flags
+        bacnetType: bit-string
+        kublingType: VARBINARY
+      - name: reliability
+        property:
+          id: 103
+          name: reliability
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: out_of_service
+        property:
+          id: 81
+          name: out-of-service
+        bacnetType: boolean
+        kublingType: BOOLEAN
+
+  - name: BINARY_POINTS
+    objectTypes:
+      - binary-input
+      - binary-output
+      - binary-value
+    columns:
+      - name: object_identifier
+        property:
+          id: 75
+          name: object-identifier
+        bacnetType: object-identifier
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_name
+        property:
+          id: 77
+          name: object-name
+        bacnetType: character-string
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: description
+        property:
+          id: 28
+          name: description
+        bacnetType: character-string
+        kublingType: STRING
+      - name: present_value
+        property:
+          id: 85
+          name: present-value
+        bacnetType: enumerated
+        kublingType: STRING
+        enum:
+          0: inactive
+          1: active
+        write:
+          commandable: true
+          objectTypes:
+            - binary-output
+            - binary-value
+      - name: inactive_text
+        property:
+          id: 46
+          name: inactive-text
+        bacnetType: character-string
+        kublingType: STRING
+      - name: active_text
+        property:
+          id: 4
+          name: active-text
+        bacnetType: character-string
+        kublingType: STRING
+      - name: status_flags
+        property:
+          id: 111
+          name: status-flags
+        bacnetType: bit-string
+        kublingType: VARBINARY
+      - name: reliability
+        property:
+          id: 103
+          name: reliability
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: out_of_service
+        property:
+          id: 81
+          name: out-of-service
+        bacnetType: boolean
+        kublingType: BOOLEAN
+
+  - name: MULTISTATE_POINTS
+    objectTypes:
+      - multi-state-input
+      - multi-state-output
+      - multi-state-value
+    columns:
+      - name: object_identifier
+        property:
+          id: 75
+          name: object-identifier
+        bacnetType: object-identifier
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: object_name
+        property:
+          id: 77
+          name: object-name
+        bacnetType: character-string
+        kublingType: STRING
+        required: true
+        nullable: false
+      - name: description
+        property:
+          id: 28
+          name: description
+        bacnetType: character-string
+        kublingType: STRING
+      - name: present_value
+        property:
+          id: 85
+          name: present-value
+        bacnetType: unsigned
+        kublingType: INTEGER
+        write:
+          commandable: true
+          objectTypes:
+            - multi-state-output
+            - multi-state-value
+      - name: number_of_states
+        property:
+          id: 74
+          name: number-of-states
+        bacnetType: unsigned
+        kublingType: INTEGER
+      - name: state_text
+        property:
+          id: 110
+          name: state-text
+        bacnetType: character-string
+        kublingType: STRING
+        array: true
+      - name: status_flags
+        property:
+          id: 111
+          name: status-flags
+        bacnetType: bit-string
+        kublingType: VARBINARY
+      - name: reliability
+        property:
+          id: 103
+          name: reliability
+        bacnetType: enumerated
+        kublingType: STRING
+      - name: out_of_service
+        property:
+          id: 81
+          name: out-of-service
+        bacnetType: boolean
+        kublingType: BOOLEAN

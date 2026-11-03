@@ -21,6 +21,7 @@ TAG_PREFIXES = {
     "python": "sdk-python/v",
 }
 PROVIDER_MODULES = (
+    "bacnet",
     "cassandra",
     "host",
     "inmemory",

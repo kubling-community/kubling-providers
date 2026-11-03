@@ -1,0 +1,33 @@
+server:
+  listen: "0.0.0.0:50051"
+  shutdownGracePeriod: 10s
+
+logging:
+  level: info
+
+profiles:
+  files: []
+
+attachments:
+  - id: local-fixture
+    bind: 127.0.0.1:47809
+    transaction:
+      apduTimeout: 3s
+      retries: 2
+      segmentTimeout: 2s
+    registry:
+      observationTTL: 5m
+
+scopes:
+  - namespace: lab
+    id: simulated
+    attachment: local-fixture
+    mutations:
+      enabled: true
+      priority: 16
+    discovery:
+      interval: 1m
+      window: 500ms
+    staticDevices:
+      - deviceInstance: 1234
+        endpoint: 127.0.0.1:47808

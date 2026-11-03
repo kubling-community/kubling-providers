@@ -37,6 +37,8 @@ Thumbs.db
 /testing/kubling/provider-test-descriptor-bundle.zip
 /providers/host/build/
 /providers/host/dist/
+/providers/bacnet/build/
+/providers/bacnet/dist/
 
 # Generated Java and Python bindings and packages
 /sdk-java/generated/
