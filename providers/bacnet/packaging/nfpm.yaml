@@ -1,0 +1,52 @@
+name: kubling-bacnet-provider
+arch: ${PACKAGE_ARCH}
+platform: linux
+version: ${PACKAGE_VERSION}
+version_schema: semver
+release: "1"
+section: admin
+priority: optional
+maintainer: Kubling contributors <kubling-community@users.noreply.github.com>
+description: BACnet/IP provider for Kubling
+homepage: https://github.com/kubling-community/kubling-providers
+license: Apache-2.0
+
+contents:
+  - src: build/kubling-provider-bacnet
+    dst: /usr/bin/kubling-provider-bacnet
+    file_info:
+      mode: 0755
+  - src: packaging/systemd/kubling-bacnet-provider.service
+    dst: /usr/lib/systemd/system/kubling-bacnet-provider.service
+    file_info:
+      mode: 0644
+  - dst: /etc/kubling
+    type: dir
+    file_info:
+      mode: 0755
+  - src: config.example.yaml
+    dst: /etc/kubling/bacnet-provider.yaml.example
+    file_info:
+      mode: 0644
+  - src: README.md
+    dst: /usr/share/doc/kubling-bacnet-provider/README.md
+    file_info:
+      mode: 0644
+  - src: profiles/README.md
+    dst: /usr/share/doc/kubling-bacnet-provider/profiles/README.md
+    file_info:
+      mode: 0644
+  - src: ../../LICENSE
+    dst: /usr/share/doc/kubling-bacnet-provider/copyright
+    file_info:
+      mode: 0644
+
+scripts:
+  postinstall: packaging/scripts/postinstall.sh
+  preremove: packaging/scripts/preremove.sh
+  postremove: packaging/scripts/postremove.sh
+
+deb:
+  compression: xz
+  fields:
+    Bugs: https://github.com/kubling-community/kubling-providers/issues

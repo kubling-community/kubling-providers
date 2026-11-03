@@ -1,0 +1,144 @@
+name: BACnet Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/bacnet/v*'
+    paths:
+      - 'providers/bacnet/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-bacnet.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/bacnet/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-bacnet.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: BACnet provider
+      module_directory: providers/bacnet
+
+  container:
+    needs: validate
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: bacnet
+      provider_directory: providers/bacnet
+      image_repository: docker.io/kubling/bacnet-provider
+      image_title: Kubling BACnet Provider
+      image_description: BACnet/IP provider for Kubling
+    secrets: inherit
+
+  artifacts:
+    name: Build Linux packages
+    needs: validate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+          cache-dependency-path: providers/bacnet/go.sum
+
+      - name: Install nFPM
+        env:
+          GOBIN: ${{ runner.temp }}/bin
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.47.0
+
+      - name: Resolve artifact version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" == refs/tags/providers/bacnet/v* ]]; then
+            package_version="${GITHUB_REF_NAME#"providers/bacnet/v"}"
+          else
+            package_version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "package=${package_version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build Debian packages
+        shell: bash
+        env:
+          NFPM_BINARY: ${{ runner.temp }}/bin/nfpm
+          PACKAGE_VERSION: ${{ steps.version.outputs.package }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)"
+          export SOURCE_DATE_EPOCH
+
+          for arch in amd64 arm64; do
+            providers/bacnet/packaging/build-deb.sh \
+              "${PACKAGE_VERSION}" "${arch}" "${GITHUB_WORKSPACE}/dist"
+          done
+
+          (cd dist && sha256sum ./*.deb >SHA256SUMS)
+
+      - name: Verify Debian packages
+        run: |
+          set -euo pipefail
+          for package in dist/*.deb; do
+            providers/bacnet/packaging/verify-deb.sh "${package}"
+            dpkg-deb --info "${package}"
+          done
+
+      - name: Upload Linux packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: bacnet-provider-release
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/bacnet/v')
+    needs:
+      - validate
+      - container
+      - artifacts
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download release packages
+        uses: actions/download-artifact@v4
+        with:
+          name: bacnet-provider-release
+          path: dist
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "BACnet Provider ${{ needs.container.outputs.version }}" \
+            dist/*

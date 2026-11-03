@@ -12,6 +12,7 @@ updates:
   - package-ecosystem: gomod
     directories:
       - /sdk-go
+      - /providers/bacnet
       - /providers/cassandra
       - /providers/host
       - /providers/inmemory

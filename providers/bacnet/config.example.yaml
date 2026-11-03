@@ -1,0 +1,12 @@
+server:
+  listen: "0.0.0.0:50051"
+  shutdownGracePeriod: 10s
+
+logging:
+  level: info
+
+profiles:
+  files: []
+
+attachments: []
+scopes: []

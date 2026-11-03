@@ -1,0 +1,24 @@
+name: kubling-bacnet-local
+
+services:
+  device:
+    image: kubling-bacnet-test-device:local
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: simulator.Dockerfile
+    command:
+      - "1234"
+      - kubling-lab-device
+    ports:
+      - "127.0.0.1:47808:47808/udp"
+    stop_grace_period: 1s
+    healthcheck:
+      test:
+        - CMD
+        - pidof
+        - bacserv
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
