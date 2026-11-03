@@ -107,5 +107,13 @@ At startup, the provider builds a deterministic union of every concrete
 profile. A column that is absent from any profile contributing to the same
 table becomes nullable in that union. Adding a profile that introduces tables
 or columns changes the catalog and therefore requires the datasource schema to
-be refreshed. Use `-check` to validate the union or `-print-metadata` to inspect
-it without opening network sockets.
+be refreshed.
+
+The provider also derives its semantic fragment from this compiled union.
+Additional columns become typed semantic properties, and an additional table
+becomes an entity with a stable identity and a relationship to its underlying
+BACnet object. Profiles cannot currently declare arbitrary semantic
+relationships or ontology terms.
+
+Use `-check` to validate the union or `-print-metadata` to inspect it without
+opening network sockets.

@@ -52,6 +52,20 @@ properties that are unavailable become `NULL`; a missing property declared as
 required by the selected profile fails the query. Object enumeration is
 bounded to 4096 entries per device.
 
+## Semantic fragment
+
+The provider publishes a source-local semantic fragment generated from the
+same compiled catalog as its relational schema. No separate semantic file or
+configuration is required. It describes scopes, devices, BACnet objects and
+the specialized point families, including their stable identities, typed
+properties and executable relationships.
+
+Profile-defined columns and tables extend the fragment automatically. A new
+table becomes a semantic entity related to its underlying BACnet object, while
+new columns become typed properties of their table entity. This provides the
+structural semantics of the exposed catalog; profiles cannot currently declare
+arbitrary domain relationships or ontology terms.
+
 ## Updates
 
 BACnet writes are disabled by default. Enable them for a logical scope and
