@@ -8,6 +8,7 @@ import "kubling/provider/v1/lob.proto";
 import "kubling/provider/v1/mutation.proto";
 import "kubling/provider/v1/query.proto";
 import "kubling/provider/v1/semantic.proto";
+import "kubling/provider/v1/transaction.proto";
 
 option go_package = "github.com/kubling-community/kubling-providers/sdk-go/kubling/provider/v1;providerv1";
 option java_multiple_files = true;
@@ -49,6 +50,27 @@ service ProviderService {
 
   // Reports whether the logical connection has an active native transaction.
   rpc IsInTransaction(IsInTransactionRequest) returns (IsInTransactionResponse);
+
+  // Starts a durable transaction branch on a logical connection.
+  rpc BeginTransactionBranch(BeginTransactionBranchRequest) returns (BeginTransactionBranchResponse);
+
+  // Durably prepares a transaction branch for later resolution.
+  rpc PrepareTransactionBranch(PrepareTransactionBranchRequest) returns (PrepareTransactionBranchResponse);
+
+  // Commits an active one-phase or previously prepared transaction branch.
+  rpc CommitTransactionBranch(CommitTransactionBranchRequest) returns (CommitTransactionBranchResponse);
+
+  // Rolls back an active or previously prepared transaction branch.
+  rpc RollbackTransactionBranch(RollbackTransactionBranchRequest) returns (RollbackTransactionBranchResponse);
+
+  // Streams branches that still require coordinator resolution.
+  rpc RecoverTransactionBranches(RecoverTransactionBranchesRequest) returns (stream RecoverTransactionBranchesResponse);
+
+  // Returns a branch state after an ambiguous response or reconnect.
+  rpc GetTransactionBranchStatus(GetTransactionBranchStatusRequest) returns (GetTransactionBranchStatusResponse);
+
+  // Releases a retained terminal outcome after coordinator acknowledgement.
+  rpc ForgetTransactionBranch(ForgetTransactionBranchRequest) returns (ForgetTransactionBranchResponse);
 
   // Executes a query and streams its result in batches.
   rpc Query(QueryRequest) returns (stream QueryResponse);

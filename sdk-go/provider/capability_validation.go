@@ -14,7 +14,13 @@ type valueTypeDirections struct {
 	output bool
 }
 
+const maxResourceManagerIDBytes = 256
+
 func validateProviderCapabilities(capabilities *Capabilities) error {
+	if err := validateTransactionCapabilities(capabilities.GetTransactions()); err != nil {
+		return err
+	}
+
 	if err := validateAggregateCapabilities(
 		capabilities.GetQuery().GetAggregates(),
 	); err != nil {
@@ -147,6 +153,37 @@ func validateProviderCapabilities(capabilities *Capabilities) error {
 				grpcfeatures.LobReadV1,
 			)
 		}
+	}
+
+	return nil
+}
+
+func validateTransactionCapabilities(
+	transactions *providerv1.TransactionCapabilities,
+) error {
+	if transactions == nil || transactions.GetRecovery() == nil {
+		return nil
+	}
+
+	recovery := transactions.GetRecovery()
+	resourceManagerID := recovery.GetResourceManagerId()
+	if !recovery.GetSupported() {
+		if resourceManagerID != "" {
+			return fmt.Errorf(
+				"transactions.recovery.resource_manager_id must be empty when recovery is unsupported",
+			)
+		}
+
+		return nil
+	}
+
+	if !transactions.GetSupported() {
+		return fmt.Errorf(
+			"transactions.supported must be true when durable recovery is supported",
+		)
+	}
+	if err := validateResourceManagerID(resourceManagerID); err != nil {
+		return fmt.Errorf("transactions.recovery.%w", err)
 	}
 
 	return nil

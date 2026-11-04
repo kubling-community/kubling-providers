@@ -35,10 +35,13 @@ def java():
                 "AccessPatternMetadata",
                 "ValueCapabilities",
                 "ReadLobRequest",
+                "TransactionBranchId",
+                "TransactionRecoveryCapabilities",
             )]
             + [
                 "META-INF/LICENSE",
                 "META-INF/proto/kubling/provider/v1/provider.proto",
+                "META-INF/proto/kubling/provider/v1/transaction.proto",
             ],
         )
         duplicated = [
@@ -82,6 +85,7 @@ def python():
         "provider",
         "query",
         "semantic",
+        "transaction",
         "tuple",
     )
     required = [f"kubling/provider/v1/{name}_pb2.py" for name in modules]

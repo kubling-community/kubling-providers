@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.google.protobuf.ByteString;
 import com.kubling.transport.grpc.ArrayValue;
 import com.kubling.transport.grpc.NullValue;
 import com.kubling.transport.grpc.TypeDescriptor;
@@ -152,6 +153,31 @@ class ContractTest {
   }
 
   @Test
+  void preservesDurableTransactionIdentity() throws Exception {
+    byte[] branchId = new byte[256];
+    for (int index = 0; index < branchId.length; index++) {
+      branchId[index] = (byte) index;
+    }
+    TransactionBranchId branch = TransactionBranchId.newBuilder()
+        .setResourceManagerId("warehouse-primary")
+        .setBranchId(ByteString.copyFrom(branchId))
+        .build();
+    TransactionCapabilities capabilities = TransactionCapabilities.newBuilder()
+        .setSupported(true)
+        .setRecovery(TransactionRecoveryCapabilities.newBuilder()
+            .setSupported(true)
+            .setResourceManagerId("warehouse-primary"))
+        .build();
+
+    assertEquals(branch, TransactionBranchId.parseFrom(branch.toByteArray()));
+    assertEquals(
+        "warehouse-primary",
+        TransactionCapabilities.parseFrom(capabilities.toByteArray())
+            .getRecovery()
+            .getResourceManagerId());
+  }
+
+  @Test
   void exposesProviderAndLobServiceDescriptors() {
     assertEquals(
         MethodDescriptor.MethodType.SERVER_STREAMING,
@@ -162,6 +188,13 @@ class ContractTest {
     assertEquals(
         MethodDescriptor.MethodType.UNARY,
         ProviderServiceGrpc.getReleaseLobMethod().getType());
+    assertEquals(
+        MethodDescriptor.MethodType.UNARY,
+        ProviderServiceGrpc.getPrepareTransactionBranchMethod().getType());
+    assertEquals(
+        MethodDescriptor.MethodType.SERVER_STREAMING,
+        ProviderServiceGrpc.getRecoverTransactionBranchesMethod().getType());
     assertNotNull(getClass().getResource("/META-INF/proto/kubling/provider/v1/provider.proto"));
+    assertNotNull(getClass().getResource("/META-INF/proto/kubling/provider/v1/transaction.proto"));
   }
 }

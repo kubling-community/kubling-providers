@@ -21,11 +21,17 @@ type queryKey struct {
 type cacheState struct {
 	mu sync.Mutex
 
-	store             *memoryStore
-	globalGeneration  uint64
-	entityGenerations map[string]uint64
-	maxEntryBytes     int64
-	dependencies      map[string][]string
+	store               *memoryStore
+	globalGeneration    uint64
+	entityGenerations   map[string]uint64
+	maxEntryBytes       int64
+	dependencies        map[string][]string
+	branchInvalidations map[string]branchInvalidation
+}
+
+type branchInvalidation struct {
+	entities []string
+	all      bool
 }
 
 func newCacheState(config normalizedConfig) *cacheState {
@@ -35,9 +41,10 @@ func newCacheState(config normalizedConfig) *cacheState {
 			config.maxBytes,
 			config.ttl,
 		),
-		entityGenerations: make(map[string]uint64),
-		maxEntryBytes:     config.maxEntryBytes,
-		dependencies:      config.dependencies,
+		entityGenerations:   make(map[string]uint64),
+		maxEntryBytes:       config.maxEntryBytes,
+		dependencies:        config.dependencies,
+		branchInvalidations: make(map[string]branchInvalidation),
 	}
 }
 
@@ -119,6 +126,73 @@ func (s *cacheState) invalidateAll() {
 	s.mu.Lock()
 	s.globalGeneration++
 	s.mu.Unlock()
+}
+
+func (s *cacheState) retainBranchInvalidation(
+	branch *providerv1.TransactionBranchId,
+	entities map[string]struct{},
+	all bool,
+) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	key := cachedBranchKey(branch)
+	previous := s.branchInvalidations[key]
+	if all || previous.all {
+		s.branchInvalidations[key] = branchInvalidation{all: true}
+		return
+	}
+
+	merged := make(map[string]struct{}, len(previous.entities)+len(entities))
+	for _, entity := range previous.entities {
+		merged[entity] = struct{}{}
+	}
+	for entity := range entities {
+		merged[entity] = struct{}{}
+	}
+
+	retained := branchInvalidation{}
+	if len(merged) > 0 {
+		retained.entities = make([]string, 0, len(merged))
+		for entity := range merged {
+			retained.entities = append(retained.entities, entity)
+		}
+	}
+	s.branchInvalidations[key] = retained
+}
+
+func (s *cacheState) resolveBranchInvalidation(
+	branch *providerv1.TransactionBranchId,
+	invalidate bool,
+) {
+	key := cachedBranchKey(branch)
+	s.mu.Lock()
+	pending, found := s.branchInvalidations[key]
+	delete(s.branchInvalidations, key)
+	s.mu.Unlock()
+
+	if !invalidate {
+		return
+	}
+	if !found || pending.all {
+		s.invalidateAll()
+		return
+	}
+	if len(pending.entities) > 0 {
+		s.invalidateEntities(pending.entities)
+	}
+}
+
+func (s *cacheState) discardBranchInvalidation(
+	branch *providerv1.TransactionBranchId,
+) {
+	s.mu.Lock()
+	delete(s.branchInvalidations, cachedBranchKey(branch))
+	s.mu.Unlock()
+}
+
+func cachedBranchKey(branch *providerv1.TransactionBranchId) string {
+	return branch.GetResourceManagerId() + "\x00" + string(branch.GetBranchId())
 }
 
 func (s *cacheState) generation(

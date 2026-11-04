@@ -89,6 +89,30 @@ message TransactionCapabilities {
   // When false, Kubling may provide transactional behavior through its
   // internal soft transaction mechanism.
   bool supported = 1;
+
+  // Optional durable recovery support for prepared transaction branches.
+  //
+  // This capability is stronger than connection-local transaction support.
+  // A provider advertising it must preserve prepared branches after the
+  // original logical connection is lost and after the provider restarts.
+  TransactionRecoveryCapabilities recovery = 2;
+}
+
+// Durable transaction recovery exposed by a provider resource manager.
+message TransactionRecoveryCapabilities {
+  // True when transaction branches can be prepared, enumerated, and resolved
+  // independently from their original logical connection.
+  bool supported = 1;
+
+  // Stable public identity of the resource manager represented by this
+  // provider server.
+  //
+  // The identity must remain unchanged across logical connections, provider
+  // restarts, and replicas that share the same durable transaction state. It
+  // is an opaque identifier, not a credential, endpoint, or display name.
+  // The UTF-8 value must contain between 1 and 256 bytes with no leading or
+  // trailing whitespace when supported is true, and must otherwise be empty.
+  string resource_manager_id = 2;
 }
 
 // Query capabilities that affect planning or exact result semantics.

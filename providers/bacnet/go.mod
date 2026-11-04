@@ -4,7 +4,7 @@ go 1.26.0
 
 require (
 	github.com/kubling-community/kubling-grpc/sdk-go v1.1.1
-	github.com/kubling-community/kubling-providers/sdk-go v0.6.1
+	github.com/kubling-community/kubling-providers/sdk-go v0.7.0
 	github.com/otfabric/go-bacnet v0.4.1
 	google.golang.org/grpc v1.83.2
 	google.golang.org/protobuf v1.36.11
