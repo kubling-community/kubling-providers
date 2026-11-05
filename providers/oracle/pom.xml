@@ -28,7 +28,7 @@
     <project.build.systemJdk>21</project.build.systemJdk>
     <project.build.targetJdk>21</project.build.targetJdk>
     <basepom.check.skip-extended>true</basepom.check.skip-extended>
-    <kubling.provider.grpc.version>0.7.0</kubling.provider.grpc.version>
+    <kubling.provider.grpc.version>0.7.1</kubling.provider.grpc.version>
     <kubling.grpc.version>1.1.1</kubling.grpc.version>
     <protobuf.version>4.36.1</protobuf.version>
     <grpc.version>1.84.0</grpc.version>
