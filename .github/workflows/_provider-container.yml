@@ -23,6 +23,11 @@ on:
         description: OCI image description
         required: true
         type: string
+      sdk_kind:
+        description: Provider SDK dependency to verify before a tagged release
+        required: false
+        default: go
+        type: string
     outputs:
       release:
         description: Whether this build was triggered by a provider release tag
@@ -87,7 +92,7 @@ jobs:
           echo "version=${version}" >> "${GITHUB_OUTPUT}"
 
       - name: Verify released Go SDK dependency
-        if: steps.version.outputs.release == 'true'
+        if: steps.version.outputs.release == 'true' && inputs.sdk_kind == 'go'
         shell: bash
         env:
           PROVIDER_DIRECTORY: ${{ inputs.provider_directory }}
@@ -110,6 +115,34 @@ jobs:
             echo "::error::Local sdk-go sources differ from required release ${sdk_tag}."
             echo "::error::Release the SDK and update ${PROVIDER_DIRECTORY}/go.mod before publishing this provider."
             git diff --stat "${sdk_tag}" -- sdk-go
+            exit 1
+          fi
+
+      - name: Verify released Java SDK dependency
+        if: steps.version.outputs.release == 'true' && inputs.sdk_kind == 'java'
+        shell: bash
+        env:
+          PROVIDER_DIRECTORY: ${{ inputs.provider_directory }}
+        run: |
+          sdk_version="$(sed -n \
+            's:.*<kubling.provider.grpc.version>\([^<]*\)</kubling.provider.grpc.version>.*:\1:p' \
+            "${PROVIDER_DIRECTORY}/pom.xml" | head -n 1)"
+
+          if [[ ! "${sdk_version}" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Provider requires invalid Java SDK version ${sdk_version:-<missing>}."
+            exit 1
+          fi
+
+          sdk_tag="sdk-java/v${sdk_version}"
+          if ! git rev-parse --verify --quiet "refs/tags/${sdk_tag}^{commit}" >/dev/null; then
+            echo "::error::Required Java SDK release ${sdk_tag} does not exist."
+            exit 1
+          fi
+
+          if ! git diff --quiet "${sdk_tag}" -- buf.lock buf.yaml proto sdk-java; then
+            echo "::error::Local Java SDK inputs differ from required release ${sdk_tag}."
+            echo "::error::Release the Java SDK and update ${PROVIDER_DIRECTORY}/pom.xml before publishing this provider."
+            git diff --stat "${sdk_tag}" -- buf.lock buf.yaml proto sdk-java
             exit 1
           fi
 
