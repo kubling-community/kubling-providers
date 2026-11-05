@@ -1,0 +1,12 @@
+**
+!LICENSE
+!buf.yaml
+!buf.lock
+!proto/
+!proto/**
+!sdk-java/
+!sdk-java/buf.gen.yaml
+!sdk-java/pom.xml
+!providers/
+!providers/oracle/
+!providers/oracle/**

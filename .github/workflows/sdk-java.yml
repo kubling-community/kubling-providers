@@ -47,9 +47,10 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Validate coordinated version
+      - name: Validate versions
         run: |
           python3 tools/check_release.py all
+          python3 tools/check_release.py java-maintenance
 
       - name: Set up GraalVM 25
         uses: actions/setup-java@v5
@@ -75,9 +76,15 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           python3 tools/check_release.py java "${RELEASE_TAG}"
+          python3 tools/check_release.py java-maintenance
           test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
           git merge-base --is-ancestor HEAD origin/main
-          python3 tools/check_release.py train HEAD
+          java_version="$("${MAVEN_COMMAND}" --quiet --no-transfer-progress \
+            -f sdk-java/pom.xml help:evaluate \
+            -Dexpression=project.version -DforceStdout | tail -n 1)"
+          if [[ "${java_version}" == "$(cat VERSION)" ]]; then
+            python3 tools/check_release.py train HEAD
+          fi
 
       - name: Generate, compile, test and package
         run: |
@@ -128,9 +135,15 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           python3 tools/check_release.py java "${RELEASE_TAG}"
+          python3 tools/check_release.py java-maintenance
           test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${RELEASE_TAG}^{commit}")"
           git merge-base --is-ancestor HEAD origin/main
-          python3 tools/check_release.py train HEAD
+          java_version="$("${MAVEN_COMMAND}" --quiet --no-transfer-progress \
+            -f sdk-java/pom.xml help:evaluate \
+            -Dexpression=project.version -DforceStdout | tail -n 1)"
+          if [[ "${java_version}" == "$(cat VERSION)" ]]; then
+            python3 tools/check_release.py train HEAD
+          fi
           bash tools/check_java_build.sh
       - name: Build, sign and publish to Maven Central
         env:

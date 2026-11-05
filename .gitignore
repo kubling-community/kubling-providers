@@ -39,6 +39,7 @@ Thumbs.db
 /providers/host/dist/
 /providers/bacnet/build/
 /providers/bacnet/dist/
+/providers/oracle/target/
 
 # Generated Java and Python bindings and packages
 /sdk-java/generated/

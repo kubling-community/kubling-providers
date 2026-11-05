@@ -39,9 +39,10 @@ jobs:
             "-DdistributionSha256Sum=${KUBLING_MAVEN_DISTRIBUTION_SHA256}"
           "${RUNNER_TEMP}/mvnw" --batch-mode --version
           echo "MAVEN_COMMAND=${RUNNER_TEMP}/mvnw" >> "${GITHUB_ENV}"
-      - name: Validate coordinated version and build JDK
+      - name: Validate versions and build JDK
         run: |
           python3 tools/check_release.py all
+          python3 tools/check_release.py java-maintenance
           bash tools/check_java_build.sh
       - name: Build, test and sign without deployment
         env:

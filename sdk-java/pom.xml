@@ -6,11 +6,11 @@
   <parent>
     <groupId>org.basepom</groupId>
     <artifactId>basepom-foundation</artifactId>
-    <version>68</version>
+    <version>71</version>
   </parent>
   <groupId>com.kubling</groupId>
   <artifactId>kubling-provider-grpc</artifactId>
-  <version>0.7.0</version>
+  <version>0.7.1</version>
   <name>Kubling provider gRPC Java bindings</name>
   <description>Generated Java messages and gRPC stubs for the Kubling provider protocol.</description>
   <url>https://github.com/kubling-community/kubling-providers</url>
@@ -42,9 +42,9 @@
     <kubling.grpc.version>1.1.1</kubling.grpc.version>
     <protobuf.version>4.36.1</protobuf.version>
     <grpc.version>1.84.0</grpc.version>
-    <guava.version>33.6.0-jre</guava.version>
+    <guava.version>33.7.2-jre</guava.version>
     <junit.version>5.12.2</junit.version>
-    <project.build.outputTimestamp>2026-09-18T00:00:00Z</project.build.outputTimestamp>
+    <project.build.outputTimestamp>2026-11-05T00:00:00Z</project.build.outputTimestamp>
   </properties>
   <dependencyManagement>
     <dependencies>

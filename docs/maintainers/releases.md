@@ -42,8 +42,22 @@ tests the module. Push `sdk-go/vMAJOR.MINOR.PATCH` only after the change is on
 `main`.
 
 The next coordinated contract release must set `sdk-go/VERSION` back to the
-same version as `VERSION`. Java and Python bindings remain part of the
-coordinated release train.
+same version as `VERSION`.
+
+## Java SDK maintenance releases
+
+The Java SDK may also receive an independent patch while the provider protocol
+is unchanged. Update the version in `sdk-java/pom.xml` and every Java provider
+that consumes it. The version must keep the contract's major and minor numbers
+and use a later patch number.
+
+The Java workflow verifies the coordinated release base, builds the package and
+rejects protocol changes. Once the change is on `main`, push the matching
+`sdk-java/vMAJOR.MINOR.PATCH` tag, wait for validation, then use the same tag to
+publish through the **Java bindings** workflow.
+
+The next coordinated contract release must align the Java SDK with `VERSION`.
+Python bindings remain part of the coordinated release train.
 
 Run the **Java signing check** before the first Maven Central publication and
 after rotating the signing key. It signs and verifies every Java artifact
