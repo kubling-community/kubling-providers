@@ -11,6 +11,7 @@ from kubling.provider.v1 import (
     metadata_pb2,
     provider_pb2_grpc,
     query_pb2,
+    transaction_pb2,
     tuple_pb2,
 )
 from kubling.v1 import value_pb2
@@ -29,6 +30,7 @@ class DistributionTest(unittest.TestCase):
             "provider",
             "query",
             "semantic",
+            "transaction",
             "tuple",
         ):
             importlib.import_module(f"kubling.provider.v1.{name}_pb2")
@@ -195,12 +197,46 @@ class DistributionTest(unittest.TestCase):
         decoded = metadata_pb2.TableMetadata.FromString(table.SerializeToString())
         self.assertEqual(decoded.access_patterns[0], table.access_patterns[0])
 
+    def test_preserves_durable_transaction_identity(self):
+        branch = transaction_pb2.TransactionBranchId(
+            resource_manager_id="warehouse-primary",
+            branch_id=bytes(range(256)),
+        )
+        capabilities = capabilities_pb2.TransactionCapabilities(
+            supported=True,
+            recovery=capabilities_pb2.TransactionRecoveryCapabilities(
+                supported=True,
+                resource_manager_id="warehouse-primary",
+            ),
+        )
+
+        self.assertEqual(
+            transaction_pb2.TransactionBranchId.FromString(
+                branch.SerializeToString()
+            ),
+            branch,
+        )
+        self.assertEqual(
+            capabilities_pb2.TransactionCapabilities.FromString(
+                capabilities.SerializeToString()
+            ).recovery.resource_manager_id,
+            "warehouse-primary",
+        )
+
     def test_constructs_provider_stub_without_connecting(self):
         with grpc.insecure_channel("localhost:1") as channel:
             provider = provider_pb2_grpc.ProviderServiceStub(channel)
             self.assertIsInstance(provider.Query, grpc.UnaryStreamMultiCallable)
             self.assertIsInstance(provider.ReadLob, grpc.UnaryStreamMultiCallable)
             self.assertIsInstance(provider.ReleaseLob, grpc.UnaryUnaryMultiCallable)
+            self.assertIsInstance(
+                provider.PrepareTransactionBranch,
+                grpc.UnaryUnaryMultiCallable,
+            )
+            self.assertIsInstance(
+                provider.RecoverTransactionBranches,
+                grpc.UnaryStreamMultiCallable,
+            )
 
 
 if __name__ == "__main__":

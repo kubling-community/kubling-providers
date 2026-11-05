@@ -42,6 +42,7 @@ def _prepare():
             "provider",
             "query",
             "semantic",
+            "transaction",
             "tuple",
         )
     ]

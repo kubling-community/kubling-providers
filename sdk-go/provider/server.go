@@ -76,6 +76,16 @@ func (s *Server) GetCapabilities(
 			err,
 		)
 	}
+	if err := validateTransactionRecoveryImplementation(
+		response,
+		s.implementation,
+	); err != nil {
+		return nil, status.Errorf(
+			codes.Internal,
+			"provider returned invalid transaction recovery capabilities: %v",
+			err,
+		)
+	}
 
 	return response, nil
 }

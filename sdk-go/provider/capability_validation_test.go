@@ -52,6 +52,100 @@ func TestValidateProviderCapabilitiesAcceptsConsistentExtendedValues(t *testing.
 	}
 }
 
+func TestValidateProviderCapabilitiesAcceptsDurableTransactionRecovery(t *testing.T) {
+	capabilities := &Capabilities{
+		Transactions: &providerv1.TransactionCapabilities{
+			Supported: true,
+			Recovery: &providerv1.TransactionRecoveryCapabilities{
+				Supported:         true,
+				ResourceManagerId: "warehouse-primary",
+			},
+		},
+	}
+
+	if err := validateProviderCapabilities(capabilities); err != nil {
+		t.Fatalf("validateProviderCapabilities() error = %v", err)
+	}
+}
+
+func TestValidateProviderCapabilitiesRejectsInvalidTransactionRecovery(t *testing.T) {
+	tests := []struct {
+		name         string
+		transactions *providerv1.TransactionCapabilities
+		wantText     string
+	}{
+		{
+			name: "resource manager without recovery",
+			transactions: &providerv1.TransactionCapabilities{
+				Recovery: &providerv1.TransactionRecoveryCapabilities{
+					ResourceManagerId: "warehouse-primary",
+				},
+			},
+			wantText: "must be empty",
+		},
+		{
+			name: "recovery without local transactions",
+			transactions: &providerv1.TransactionCapabilities{
+				Recovery: &providerv1.TransactionRecoveryCapabilities{
+					Supported:         true,
+					ResourceManagerId: "warehouse-primary",
+				},
+			},
+			wantText: "transactions.supported must be true",
+		},
+		{
+			name: "recovery without resource manager",
+			transactions: &providerv1.TransactionCapabilities{
+				Supported: true,
+				Recovery: &providerv1.TransactionRecoveryCapabilities{
+					Supported: true,
+				},
+			},
+			wantText: "non-empty canonical identifier",
+		},
+		{
+			name: "resource manager with surrounding whitespace",
+			transactions: &providerv1.TransactionCapabilities{
+				Supported: true,
+				Recovery: &providerv1.TransactionRecoveryCapabilities{
+					Supported:         true,
+					ResourceManagerId: " warehouse-primary ",
+				},
+			},
+			wantText: "non-empty canonical identifier",
+		},
+		{
+			name: "resource manager too long",
+			transactions: &providerv1.TransactionCapabilities{
+				Supported: true,
+				Recovery: &providerv1.TransactionRecoveryCapabilities{
+					Supported: true,
+					ResourceManagerId: strings.Repeat(
+						"r",
+						maxResourceManagerIDBytes+1,
+					),
+				},
+			},
+			wantText: "exceeds 256 bytes",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateProviderCapabilities(&Capabilities{
+				Transactions: test.transactions,
+			})
+			if err == nil || !strings.Contains(err.Error(), test.wantText) {
+				t.Fatalf(
+					"validateProviderCapabilities() error = %v, want text %q",
+					err,
+					test.wantText,
+				)
+			}
+		})
+	}
+}
+
 func TestValidateProviderCapabilitiesAcceptsAggregateCapabilities(t *testing.T) {
 	capabilities := &Capabilities{Query: &providerv1.QueryCapabilities{
 		Aggregates: &providerv1.AggregateCapabilities{

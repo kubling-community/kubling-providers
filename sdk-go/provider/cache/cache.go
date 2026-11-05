@@ -136,6 +136,24 @@ func (p *Provider) SemanticFragment(
 	return semanticProvider.SemanticFragment(ctx)
 }
 
+// TransactionRecovery delegates durable branch recovery and coordinates cache
+// invalidation when a prepared branch is resolved.
+func (p *Provider) TransactionRecovery() providersdk.TransactionRecoveryManager {
+	recoveryProvider, ok := p.implementation.(providersdk.TransactionRecoveryProvider)
+	if !ok {
+		return nil
+	}
+	manager := recoveryProvider.TransactionRecovery()
+	if manager == nil {
+		return nil
+	}
+
+	return &cachedRecoveryManager{
+		TransactionRecoveryManager: manager,
+		state:                      p.state,
+	}
+}
+
 // Open delegates connection creation and wraps successful connections.
 func (p *Provider) Open(
 	ctx context.Context,

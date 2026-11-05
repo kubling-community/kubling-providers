@@ -39,6 +39,20 @@ not loaded.
 See the [semantic fragment guide](../docs/semantic-fragments.md) before choosing
 between a bundled, configured or reference model.
 
+## Durable transaction recovery
+
+`TransactionCapabilities.supported` describes a native transaction while its
+logical connection remains alive. A provider should advertise `recovery` only
+when prepared branches survive connection loss and provider restart. Such a
+provider implements `TransactionBranchConnection` and
+`TransactionRecoveryProvider`, using a stable resource-manager identifier that
+does not contain credentials or an endpoint.
+
+Provider integration tests can call
+`providertest.RunDurableTransactionRecovery`. The fixture starts three provider
+instances against the same backend and verifies retry-safe prepare, recovery,
+idempotent resolution, retained terminal status and explicit cleanup.
+
 Run the SDK tests from this directory:
 
 ```sh

@@ -19,22 +19,29 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ProviderService_GetCapabilities_FullMethodName     = "/kubling.provider.v1.ProviderService/GetCapabilities"
-	ProviderService_GetSchema_FullMethodName           = "/kubling.provider.v1.ProviderService/GetSchema"
-	ProviderService_GetSemanticFragment_FullMethodName = "/kubling.provider.v1.ProviderService/GetSemanticFragment"
-	ProviderService_OpenConnection_FullMethodName      = "/kubling.provider.v1.ProviderService/OpenConnection"
-	ProviderService_CloseConnection_FullMethodName     = "/kubling.provider.v1.ProviderService/CloseConnection"
-	ProviderService_Health_FullMethodName              = "/kubling.provider.v1.ProviderService/Health"
-	ProviderService_BeginTransaction_FullMethodName    = "/kubling.provider.v1.ProviderService/BeginTransaction"
-	ProviderService_CommitTransaction_FullMethodName   = "/kubling.provider.v1.ProviderService/CommitTransaction"
-	ProviderService_RollbackTransaction_FullMethodName = "/kubling.provider.v1.ProviderService/RollbackTransaction"
-	ProviderService_IsInTransaction_FullMethodName     = "/kubling.provider.v1.ProviderService/IsInTransaction"
-	ProviderService_Query_FullMethodName               = "/kubling.provider.v1.ProviderService/Query"
-	ProviderService_ReadLob_FullMethodName             = "/kubling.provider.v1.ProviderService/ReadLob"
-	ProviderService_ReleaseLob_FullMethodName          = "/kubling.provider.v1.ProviderService/ReleaseLob"
-	ProviderService_Insert_FullMethodName              = "/kubling.provider.v1.ProviderService/Insert"
-	ProviderService_Update_FullMethodName              = "/kubling.provider.v1.ProviderService/Update"
-	ProviderService_Delete_FullMethodName              = "/kubling.provider.v1.ProviderService/Delete"
+	ProviderService_GetCapabilities_FullMethodName            = "/kubling.provider.v1.ProviderService/GetCapabilities"
+	ProviderService_GetSchema_FullMethodName                  = "/kubling.provider.v1.ProviderService/GetSchema"
+	ProviderService_GetSemanticFragment_FullMethodName        = "/kubling.provider.v1.ProviderService/GetSemanticFragment"
+	ProviderService_OpenConnection_FullMethodName             = "/kubling.provider.v1.ProviderService/OpenConnection"
+	ProviderService_CloseConnection_FullMethodName            = "/kubling.provider.v1.ProviderService/CloseConnection"
+	ProviderService_Health_FullMethodName                     = "/kubling.provider.v1.ProviderService/Health"
+	ProviderService_BeginTransaction_FullMethodName           = "/kubling.provider.v1.ProviderService/BeginTransaction"
+	ProviderService_CommitTransaction_FullMethodName          = "/kubling.provider.v1.ProviderService/CommitTransaction"
+	ProviderService_RollbackTransaction_FullMethodName        = "/kubling.provider.v1.ProviderService/RollbackTransaction"
+	ProviderService_IsInTransaction_FullMethodName            = "/kubling.provider.v1.ProviderService/IsInTransaction"
+	ProviderService_BeginTransactionBranch_FullMethodName     = "/kubling.provider.v1.ProviderService/BeginTransactionBranch"
+	ProviderService_PrepareTransactionBranch_FullMethodName   = "/kubling.provider.v1.ProviderService/PrepareTransactionBranch"
+	ProviderService_CommitTransactionBranch_FullMethodName    = "/kubling.provider.v1.ProviderService/CommitTransactionBranch"
+	ProviderService_RollbackTransactionBranch_FullMethodName  = "/kubling.provider.v1.ProviderService/RollbackTransactionBranch"
+	ProviderService_RecoverTransactionBranches_FullMethodName = "/kubling.provider.v1.ProviderService/RecoverTransactionBranches"
+	ProviderService_GetTransactionBranchStatus_FullMethodName = "/kubling.provider.v1.ProviderService/GetTransactionBranchStatus"
+	ProviderService_ForgetTransactionBranch_FullMethodName    = "/kubling.provider.v1.ProviderService/ForgetTransactionBranch"
+	ProviderService_Query_FullMethodName                      = "/kubling.provider.v1.ProviderService/Query"
+	ProviderService_ReadLob_FullMethodName                    = "/kubling.provider.v1.ProviderService/ReadLob"
+	ProviderService_ReleaseLob_FullMethodName                 = "/kubling.provider.v1.ProviderService/ReleaseLob"
+	ProviderService_Insert_FullMethodName                     = "/kubling.provider.v1.ProviderService/Insert"
+	ProviderService_Update_FullMethodName                     = "/kubling.provider.v1.ProviderService/Update"
+	ProviderService_Delete_FullMethodName                     = "/kubling.provider.v1.ProviderService/Delete"
 )
 
 // ProviderServiceClient is the client API for ProviderService service.
@@ -67,6 +74,20 @@ type ProviderServiceClient interface {
 	RollbackTransaction(ctx context.Context, in *RollbackTransactionRequest, opts ...grpc.CallOption) (*RollbackTransactionResponse, error)
 	// Reports whether the logical connection has an active native transaction.
 	IsInTransaction(ctx context.Context, in *IsInTransactionRequest, opts ...grpc.CallOption) (*IsInTransactionResponse, error)
+	// Starts a durable transaction branch on a logical connection.
+	BeginTransactionBranch(ctx context.Context, in *BeginTransactionBranchRequest, opts ...grpc.CallOption) (*BeginTransactionBranchResponse, error)
+	// Durably prepares a transaction branch for later resolution.
+	PrepareTransactionBranch(ctx context.Context, in *PrepareTransactionBranchRequest, opts ...grpc.CallOption) (*PrepareTransactionBranchResponse, error)
+	// Commits an active one-phase or previously prepared transaction branch.
+	CommitTransactionBranch(ctx context.Context, in *CommitTransactionBranchRequest, opts ...grpc.CallOption) (*CommitTransactionBranchResponse, error)
+	// Rolls back an active or previously prepared transaction branch.
+	RollbackTransactionBranch(ctx context.Context, in *RollbackTransactionBranchRequest, opts ...grpc.CallOption) (*RollbackTransactionBranchResponse, error)
+	// Streams branches that still require coordinator resolution.
+	RecoverTransactionBranches(ctx context.Context, in *RecoverTransactionBranchesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecoverTransactionBranchesResponse], error)
+	// Returns a branch state after an ambiguous response or reconnect.
+	GetTransactionBranchStatus(ctx context.Context, in *GetTransactionBranchStatusRequest, opts ...grpc.CallOption) (*GetTransactionBranchStatusResponse, error)
+	// Releases a retained terminal outcome after coordinator acknowledgement.
+	ForgetTransactionBranch(ctx context.Context, in *ForgetTransactionBranchRequest, opts ...grpc.CallOption) (*ForgetTransactionBranchResponse, error)
 	// Executes a query and streams its result in batches.
 	Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[QueryResponse], error)
 	// Reads a provider-owned LOB so Kubling can materialize it into the
@@ -190,9 +211,88 @@ func (c *providerServiceClient) IsInTransaction(ctx context.Context, in *IsInTra
 	return out, nil
 }
 
+func (c *providerServiceClient) BeginTransactionBranch(ctx context.Context, in *BeginTransactionBranchRequest, opts ...grpc.CallOption) (*BeginTransactionBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BeginTransactionBranchResponse)
+	err := c.cc.Invoke(ctx, ProviderService_BeginTransactionBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) PrepareTransactionBranch(ctx context.Context, in *PrepareTransactionBranchRequest, opts ...grpc.CallOption) (*PrepareTransactionBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(PrepareTransactionBranchResponse)
+	err := c.cc.Invoke(ctx, ProviderService_PrepareTransactionBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) CommitTransactionBranch(ctx context.Context, in *CommitTransactionBranchRequest, opts ...grpc.CallOption) (*CommitTransactionBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CommitTransactionBranchResponse)
+	err := c.cc.Invoke(ctx, ProviderService_CommitTransactionBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) RollbackTransactionBranch(ctx context.Context, in *RollbackTransactionBranchRequest, opts ...grpc.CallOption) (*RollbackTransactionBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RollbackTransactionBranchResponse)
+	err := c.cc.Invoke(ctx, ProviderService_RollbackTransactionBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) RecoverTransactionBranches(ctx context.Context, in *RecoverTransactionBranchesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[RecoverTransactionBranchesResponse], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[0], ProviderService_RecoverTransactionBranches_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[RecoverTransactionBranchesRequest, RecoverTransactionBranchesResponse]{ClientStream: stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProviderService_RecoverTransactionBranchesClient = grpc.ServerStreamingClient[RecoverTransactionBranchesResponse]
+
+func (c *providerServiceClient) GetTransactionBranchStatus(ctx context.Context, in *GetTransactionBranchStatusRequest, opts ...grpc.CallOption) (*GetTransactionBranchStatusResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTransactionBranchStatusResponse)
+	err := c.cc.Invoke(ctx, ProviderService_GetTransactionBranchStatus_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *providerServiceClient) ForgetTransactionBranch(ctx context.Context, in *ForgetTransactionBranchRequest, opts ...grpc.CallOption) (*ForgetTransactionBranchResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ForgetTransactionBranchResponse)
+	err := c.cc.Invoke(ctx, ProviderService_ForgetTransactionBranch_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *providerServiceClient) Query(ctx context.Context, in *QueryRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[QueryResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[0], ProviderService_Query_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[1], ProviderService_Query_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -211,7 +311,7 @@ type ProviderService_QueryClient = grpc.ServerStreamingClient[QueryResponse]
 
 func (c *providerServiceClient) ReadLob(ctx context.Context, in *ReadLobRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[ReadLobResponse], error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[1], ProviderService_ReadLob_FullMethodName, cOpts...)
+	stream, err := c.cc.NewStream(ctx, &ProviderService_ServiceDesc.Streams[2], ProviderService_ReadLob_FullMethodName, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -298,6 +398,20 @@ type ProviderServiceServer interface {
 	RollbackTransaction(context.Context, *RollbackTransactionRequest) (*RollbackTransactionResponse, error)
 	// Reports whether the logical connection has an active native transaction.
 	IsInTransaction(context.Context, *IsInTransactionRequest) (*IsInTransactionResponse, error)
+	// Starts a durable transaction branch on a logical connection.
+	BeginTransactionBranch(context.Context, *BeginTransactionBranchRequest) (*BeginTransactionBranchResponse, error)
+	// Durably prepares a transaction branch for later resolution.
+	PrepareTransactionBranch(context.Context, *PrepareTransactionBranchRequest) (*PrepareTransactionBranchResponse, error)
+	// Commits an active one-phase or previously prepared transaction branch.
+	CommitTransactionBranch(context.Context, *CommitTransactionBranchRequest) (*CommitTransactionBranchResponse, error)
+	// Rolls back an active or previously prepared transaction branch.
+	RollbackTransactionBranch(context.Context, *RollbackTransactionBranchRequest) (*RollbackTransactionBranchResponse, error)
+	// Streams branches that still require coordinator resolution.
+	RecoverTransactionBranches(*RecoverTransactionBranchesRequest, grpc.ServerStreamingServer[RecoverTransactionBranchesResponse]) error
+	// Returns a branch state after an ambiguous response or reconnect.
+	GetTransactionBranchStatus(context.Context, *GetTransactionBranchStatusRequest) (*GetTransactionBranchStatusResponse, error)
+	// Releases a retained terminal outcome after coordinator acknowledgement.
+	ForgetTransactionBranch(context.Context, *ForgetTransactionBranchRequest) (*ForgetTransactionBranchResponse, error)
 	// Executes a query and streams its result in batches.
 	Query(*QueryRequest, grpc.ServerStreamingServer[QueryResponse]) error
 	// Reads a provider-owned LOB so Kubling can materialize it into the
@@ -350,6 +464,27 @@ func (UnimplementedProviderServiceServer) RollbackTransaction(context.Context, *
 }
 func (UnimplementedProviderServiceServer) IsInTransaction(context.Context, *IsInTransactionRequest) (*IsInTransactionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method IsInTransaction not implemented")
+}
+func (UnimplementedProviderServiceServer) BeginTransactionBranch(context.Context, *BeginTransactionBranchRequest) (*BeginTransactionBranchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BeginTransactionBranch not implemented")
+}
+func (UnimplementedProviderServiceServer) PrepareTransactionBranch(context.Context, *PrepareTransactionBranchRequest) (*PrepareTransactionBranchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method PrepareTransactionBranch not implemented")
+}
+func (UnimplementedProviderServiceServer) CommitTransactionBranch(context.Context, *CommitTransactionBranchRequest) (*CommitTransactionBranchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method CommitTransactionBranch not implemented")
+}
+func (UnimplementedProviderServiceServer) RollbackTransactionBranch(context.Context, *RollbackTransactionBranchRequest) (*RollbackTransactionBranchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RollbackTransactionBranch not implemented")
+}
+func (UnimplementedProviderServiceServer) RecoverTransactionBranches(*RecoverTransactionBranchesRequest, grpc.ServerStreamingServer[RecoverTransactionBranchesResponse]) error {
+	return status.Errorf(codes.Unimplemented, "method RecoverTransactionBranches not implemented")
+}
+func (UnimplementedProviderServiceServer) GetTransactionBranchStatus(context.Context, *GetTransactionBranchStatusRequest) (*GetTransactionBranchStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionBranchStatus not implemented")
+}
+func (UnimplementedProviderServiceServer) ForgetTransactionBranch(context.Context, *ForgetTransactionBranchRequest) (*ForgetTransactionBranchResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ForgetTransactionBranch not implemented")
 }
 func (UnimplementedProviderServiceServer) Query(*QueryRequest, grpc.ServerStreamingServer[QueryResponse]) error {
 	return status.Errorf(codes.Unimplemented, "method Query not implemented")
@@ -570,6 +705,125 @@ func _ProviderService_IsInTransaction_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ProviderService_BeginTransactionBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BeginTransactionBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).BeginTransactionBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_BeginTransactionBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).BeginTransactionBranch(ctx, req.(*BeginTransactionBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_PrepareTransactionBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(PrepareTransactionBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).PrepareTransactionBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_PrepareTransactionBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).PrepareTransactionBranch(ctx, req.(*PrepareTransactionBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_CommitTransactionBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CommitTransactionBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).CommitTransactionBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_CommitTransactionBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).CommitTransactionBranch(ctx, req.(*CommitTransactionBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_RollbackTransactionBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RollbackTransactionBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).RollbackTransactionBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_RollbackTransactionBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).RollbackTransactionBranch(ctx, req.(*RollbackTransactionBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_RecoverTransactionBranches_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(RecoverTransactionBranchesRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(ProviderServiceServer).RecoverTransactionBranches(m, &grpc.GenericServerStream[RecoverTransactionBranchesRequest, RecoverTransactionBranchesResponse]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type ProviderService_RecoverTransactionBranchesServer = grpc.ServerStreamingServer[RecoverTransactionBranchesResponse]
+
+func _ProviderService_GetTransactionBranchStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTransactionBranchStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).GetTransactionBranchStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_GetTransactionBranchStatus_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).GetTransactionBranchStatus(ctx, req.(*GetTransactionBranchStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ProviderService_ForgetTransactionBranch_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ForgetTransactionBranchRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ProviderServiceServer).ForgetTransactionBranch(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ProviderService_ForgetTransactionBranch_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ProviderServiceServer).ForgetTransactionBranch(ctx, req.(*ForgetTransactionBranchRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ProviderService_Query_Handler(srv interface{}, stream grpc.ServerStream) error {
 	m := new(QueryRequest)
 	if err := stream.RecvMsg(m); err != nil {
@@ -712,6 +966,30 @@ var ProviderService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ProviderService_IsInTransaction_Handler,
 		},
 		{
+			MethodName: "BeginTransactionBranch",
+			Handler:    _ProviderService_BeginTransactionBranch_Handler,
+		},
+		{
+			MethodName: "PrepareTransactionBranch",
+			Handler:    _ProviderService_PrepareTransactionBranch_Handler,
+		},
+		{
+			MethodName: "CommitTransactionBranch",
+			Handler:    _ProviderService_CommitTransactionBranch_Handler,
+		},
+		{
+			MethodName: "RollbackTransactionBranch",
+			Handler:    _ProviderService_RollbackTransactionBranch_Handler,
+		},
+		{
+			MethodName: "GetTransactionBranchStatus",
+			Handler:    _ProviderService_GetTransactionBranchStatus_Handler,
+		},
+		{
+			MethodName: "ForgetTransactionBranch",
+			Handler:    _ProviderService_ForgetTransactionBranch_Handler,
+		},
+		{
 			MethodName: "ReleaseLob",
 			Handler:    _ProviderService_ReleaseLob_Handler,
 		},
@@ -729,6 +1007,11 @@ var ProviderService_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "RecoverTransactionBranches",
+			Handler:       _ProviderService_RecoverTransactionBranches_Handler,
+			ServerStreams: true,
+		},
 		{
 			StreamName:    "Query",
 			Handler:       _ProviderService_Query_Handler,
