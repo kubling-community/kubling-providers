@@ -5,13 +5,13 @@ from pathlib import Path
 import subprocess
 import tempfile
 
-from check_release import release_version
+from check_release import java_sdk_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    name = f"kubling-provider-grpc-{release_version()}"
+    name = f"kubling-provider-grpc-{java_sdk_version()}"
     target = ROOT / "sdk-java/target"
     artifacts = [
         target / (name + suffix)

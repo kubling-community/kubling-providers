@@ -6,7 +6,7 @@ from pathlib import Path
 import tarfile
 import zipfile
 
-from check_release import release_version
+from check_release import java_sdk_version, release_version
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -20,10 +20,10 @@ def require_members(actual, required):
 
 
 def java():
-    version = release_version()
+    version = java_sdk_version()
     binary = ROOT / "sdk-java/target" / f"kubling-provider-grpc-{version}.jar"
     if not binary.is_file():
-        raise ValueError(f"Missing Java artifact for VERSION {version}; run clean verify")
+        raise ValueError(f"Missing Java artifact for SDK version {version}; run clean verify")
     package = "com/kubling/provider/grpc/"
     with zipfile.ZipFile(binary) as archive:
         names = archive.namelist()

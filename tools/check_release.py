@@ -29,6 +29,7 @@ PROVIDER_MODULES = (
     "openapi",
     "redis",
 )
+JAVA_PROVIDER_MODULES = ("oracle",)
 
 
 def stable_version(path, label):
@@ -46,6 +47,17 @@ def go_sdk_version(root=ROOT):
     return stable_version(root / "sdk-go/VERSION", "sdk-go/VERSION")
 
 
+def java_sdk_version(root=ROOT):
+    namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+    pom = ET.parse(root / "sdk-java/pom.xml")
+    version = pom.findtext("m:version", namespaces=namespace)
+    if not version or not STABLE_VERSION.fullmatch(version):
+        raise ValueError(
+            "sdk-java/pom.xml must contain one stable MAJOR.MINOR.PATCH version"
+        )
+    return version
+
+
 def version_numbers(version):
     match = STABLE_VERSION.fullmatch(version)
     if not match:
@@ -56,7 +68,6 @@ def version_numbers(version):
 def package_versions(root=ROOT):
     namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
     pom = ET.parse(root / "sdk-java/pom.xml")
-    java = pom.findtext("m:version", namespaces=namespace)
     shared_java = pom.findtext("m:properties/m:kubling.grpc.version", namespaces=namespace)
     with (root / "sdk-python/pyproject.toml").open("rb") as manifest:
         python_manifest = tomllib.load(manifest)["project"]
@@ -66,7 +77,7 @@ def package_versions(root=ROOT):
         if dependency.startswith("kubling-grpc==")
     ]
     return {
-        "java": java,
+        "java": java_sdk_version(root),
         "python": python_manifest["version"],
         "shared_java": shared_java,
         "shared_python": shared_python,
@@ -77,14 +88,25 @@ def validate_manifests(root=ROOT):
     version = release_version(root)
     sdk_version = go_sdk_version(root)
     packages = package_versions(root)
-    mismatches = {
-        language: packages[language]
-        for language in ("java", "python")
-        if packages[language] != version
-    }
+    mismatches = (
+        {"python": packages["python"]} if packages["python"] != version else {}
+    )
     if mismatches:
         details = ", ".join(f"{name}={value}" for name, value in mismatches.items())
         raise ValueError(f"Package versions must equal VERSION {version}: {details}")
+
+    java_version = packages["java"]
+    if java_version != version:
+        contract_numbers = version_numbers(version)
+        java_numbers = version_numbers(java_version)
+        if (
+            java_numbers[:2] != contract_numbers[:2]
+            or java_numbers[2] <= contract_numbers[2]
+        ):
+            raise ValueError(
+                "An independent Java SDK release must be a later patch of the current "
+                f"contract version {version}; found {java_version}"
+            )
     if packages["shared_java"] != "1.1.1" or packages["shared_python"] != [
         "kubling-grpc==1.1.1"
     ]:
@@ -105,6 +127,24 @@ def validate_manifests(root=ROOT):
             + ", ".join(stale_modules)
         )
 
+    stale_java_providers = []
+    namespace = {"m": "http://maven.apache.org/POM/4.0.0"}
+    for name in JAVA_PROVIDER_MODULES:
+        pom_path = root / f"providers/{name}/pom.xml"
+        if not pom_path.is_file():
+            continue
+        pom = ET.parse(pom_path)
+        provider_version = pom.findtext(
+            "m:properties/m:kubling.provider.grpc.version", namespaces=namespace
+        )
+        if provider_version != java_version:
+            stale_java_providers.append(name)
+    if stale_java_providers:
+        raise ValueError(
+            f"Java providers do not use Java SDK {java_version}: "
+            + ", ".join(stale_java_providers)
+        )
+
     return version
 
 
@@ -116,7 +156,12 @@ def release_tags(version):
 
 def validate_tag(language, tag, root=ROOT):
     contract_version = validate_manifests(root)
-    version = go_sdk_version(root) if language == "go" else contract_version
+    if language == "go":
+        version = go_sdk_version(root)
+    elif language == "java":
+        version = java_sdk_version(root)
+    else:
+        version = contract_version
     expected = TAG_PREFIXES[language] + version
     if tag != expected:
         raise ValueError(f"Expected tag {expected}, got {tag}")
@@ -147,6 +192,12 @@ def validate_coordinated_version(root=ROOT):
         raise ValueError(
             "Coordinated contract releases require sdk-go/VERSION to equal "
             f"VERSION {version}; found {sdk_version}"
+        )
+    java_version = java_sdk_version(root)
+    if java_version != version:
+        raise ValueError(
+            "Coordinated contract releases require the Java SDK version to equal "
+            f"VERSION {version}; found {java_version}"
         )
     return version
 
@@ -194,6 +245,41 @@ def validate_go_maintenance(root=ROOT):
     return contract_version, sdk_version, base_commit
 
 
+def validate_java_maintenance(root=ROOT):
+    contract_version = validate_manifests(root)
+    sdk_version = java_sdk_version(root)
+    if sdk_version == contract_version:
+        return contract_version, sdk_version, None
+
+    tags = release_tags(contract_version)
+    resolved = {tag: tag_commit(tag, root) for tag in tags.values()}
+    missing = [tag for tag, commit in resolved.items() if commit is None]
+    if missing:
+        raise ValueError(
+            "Cannot validate the Java SDK maintenance base; missing coordinated tags: "
+            + ", ".join(missing)
+        )
+
+    base_commit = resolved[tags["proto"]]
+    mismatches = {tag: commit for tag, commit in resolved.items() if commit != base_commit}
+    if mismatches:
+        details = ", ".join(f"{tag}={commit}" for tag, commit in mismatches.items())
+        raise ValueError(
+            f"Contract {contract_version} tags do not identify one release: {details}"
+        )
+
+    protocol_paths = (":(glob)proto/**/*.proto", "buf.yaml", "buf.lock")
+    changed = git("diff", "--name-only", tags["proto"], "--", *protocol_paths, root=root)
+    if changed:
+        details = ", ".join(changed.splitlines())
+        raise ValueError(
+            "Independent Java SDK releases cannot change the provider protocol; "
+            f"changed paths: {details}"
+        )
+
+    return contract_version, sdk_version, base_commit
+
+
 def validate_tags_available(root=ROOT):
     version = validate_coordinated_version(root)
     existing = [tag for tag in release_tags(version).values() if tag_commit(tag, root)]
@@ -220,7 +306,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "target",
-        choices=("all", "available", "train", "go-maintenance", *TAG_PREFIXES),
+        choices=(
+            "all",
+            "available",
+            "train",
+            "go-maintenance",
+            "java-maintenance",
+            *TAG_PREFIXES,
+        ),
     )
     parser.add_argument("value", nargs="?", help="Tag or expected commit")
     args = parser.parse_args()
@@ -230,7 +323,8 @@ def main():
                 parser.error("all does not accept a value")
             contract_version = validate_manifests()
             print(
-                f"Validated contract {contract_version} and Go SDK {go_sdk_version()}"
+                f"Validated contract {contract_version}, Go SDK {go_sdk_version()}, "
+                f"and Java SDK {java_sdk_version()}"
             )
         elif args.target == "available":
             if args.value:
@@ -251,6 +345,20 @@ def main():
             else:
                 print(
                     f"Validated Go SDK {sdk_version} maintenance base "
+                    f"for contract {contract_version} at {base_commit}"
+                )
+        elif args.target == "java-maintenance":
+            if args.value:
+                parser.error("java-maintenance does not accept a value")
+            contract_version, sdk_version, base_commit = validate_java_maintenance()
+            if base_commit is None:
+                print(
+                    f"Java SDK {sdk_version} is coordinated with contract "
+                    f"{contract_version}"
+                )
+            else:
+                print(
+                    f"Validated Java SDK {sdk_version} maintenance base "
                     f"for contract {contract_version} at {base_commit}"
                 )
         else:
