@@ -1,0 +1,137 @@
+name: Object Storage Provider
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'providers/object-storage/v*'
+    paths:
+      - 'providers/object-storage/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-object-storage.yml'
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - 'providers/object-storage/**'
+      - 'sdk-go/**'
+      - '.github/workflows/_go-module.yml'
+      - '.github/workflows/_provider-container.yml'
+      - '.github/workflows/provider-object-storage.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    uses: ./.github/workflows/_go-module.yml
+    with:
+      module_name: object storage provider
+      module_directory: providers/object-storage
+
+  azure-integration:
+    name: Test Azure Blob lifecycle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+          cache-dependency-path: providers/object-storage/go.sum
+
+      - name: Start Azurite
+        working-directory: providers/object-storage
+        run: ./local/run.sh azure-store
+
+      - name: Test provider lifecycle
+        working-directory: providers/object-storage
+        env:
+          KUBLING_OBJECT_STORAGE_AZURE_INTEGRATION: '1'
+        run: |
+          set -a
+          . ./local/azure-fixture.env
+          set +a
+          go test ./internal/provider -run TestAzureBlobIntegrationLifecycleAndLobStreaming -count=1
+
+      - name: Stop Azurite
+        if: always()
+        working-directory: providers/object-storage
+        run: ./local/run.sh down
+
+  gcs-integration:
+    name: Test GCS lifecycle
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version: '1.26.5'
+          cache: true
+          cache-dependency-path: providers/object-storage/go.sum
+
+      - name: Start GCS emulator
+        working-directory: providers/object-storage
+        run: ./local/run.sh gcs-store
+
+      - name: Test provider lifecycle
+        working-directory: providers/object-storage
+        env:
+          KUBLING_OBJECT_STORAGE_GCS_INTEGRATION: '1'
+        run: go test ./internal/provider -run TestGCSIntegrationLifecycleAndLobStreaming -count=1
+
+      - name: Stop GCS emulator
+        if: always()
+        working-directory: providers/object-storage
+        run: ./local/run.sh down
+
+  container:
+    needs:
+      - validate
+      - azure-integration
+      - gcs-integration
+    uses: ./.github/workflows/_provider-container.yml
+    with:
+      provider_name: object-storage
+      provider_directory: providers/object-storage
+      image_repository: docker.io/kubling/object-storage-provider
+      image_title: Kubling Object Storage Provider
+      image_description: Object storage provider for Kubling
+    secrets: inherit
+
+  release:
+    name: Create GitHub release
+    if: startsWith(github.ref, 'refs/tags/providers/object-storage/v')
+    needs:
+      - validate
+      - container
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "Object Storage Provider ${{ needs.container.outputs.version }}"
