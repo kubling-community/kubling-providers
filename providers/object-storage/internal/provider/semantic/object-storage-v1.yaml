@@ -1,0 +1,86 @@
+format: kubling-semantic
+schemaVersion: 1
+kind: fragment
+metadata:
+  name: object-storage
+  namespace: object-storage
+  version: 1.0.0
+spec:
+  entities:
+    - id: StoredObject
+      name: Stored object
+      description: An immutable-key object exposed through a configured logical bucket.
+      binding:
+        relation: OBJECTS
+      properties:
+        - id: bucket
+          name: Logical bucket
+          type: string
+          binding:
+            field: bucket
+        - id: key
+          name: Object key
+          type: string
+          binding:
+            field: key
+        - id: content
+          name: Content
+          type: blob
+          binding:
+            field: content
+        - id: contentType
+          name: Content type
+          type: string
+          binding:
+            field: content_type
+        - id: contentEncoding
+          name: Content encoding
+          type: string
+          binding:
+            field: content_encoding
+        - id: contentDisposition
+          name: Content disposition
+          type: string
+          binding:
+            field: content_disposition
+        - id: cacheControl
+          name: Cache control
+          type: string
+          binding:
+            field: cache_control
+        - id: contentLength
+          name: Content length
+          type: long
+          binding:
+            field: content_length
+        - id: etag
+          name: Entity tag
+          type: string
+          binding:
+            field: etag
+        - id: lastModified
+          name: Last modified
+          type: timestamp
+          binding:
+            field: last_modified
+        - id: versionId
+          name: Version ID
+          type: string
+          binding:
+            field: version_id
+        - id: checksum
+          name: Checksum
+          type: string
+          binding:
+            field: checksum
+        - id: metadata
+          name: User metadata
+          type: json
+          binding:
+            field: metadata
+      identities:
+        - id: storedObjectIdentity
+          properties:
+            - bucket
+            - key
+  relationships: []
