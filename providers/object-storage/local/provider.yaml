@@ -1,0 +1,29 @@
+listen: 0.0.0.0:50053
+logLevel: debug
+
+lobs:
+  maxBytes: 5368709120
+  maxChunkBytes: 65536
+  retention: 5m
+
+backends:
+  local:
+    type: s3
+    region: us-east-1
+    endpoint: http://127.0.0.1:9000
+    forcePathStyle: true
+    uploadPartSizeBytes: 5242880
+    multipartThresholdBytes: 8388608
+    transferConcurrency: 2
+
+buckets:
+  media:
+    backend: local
+    name: kubling-media
+    prefix: objects
+    allowUnboundedList: true
+
+  archive:
+    backend: local
+    name: kubling-archive
+    allowUnboundedList: false

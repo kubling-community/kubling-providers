@@ -1,0 +1,26 @@
+listen: 0.0.0.0:50053
+logLevel: debug
+
+lobs:
+  maxBytes: 5368709120
+  maxChunkBytes: 65536
+  retention: 5m
+
+backends:
+  local:
+    type: gcs
+    endpoint: http://127.0.0.1:4443
+    authentication: emulator
+    uploadChunkSizeBytes: 4194304
+
+buckets:
+  media:
+    backend: local
+    name: kubling-media
+    prefix: objects
+    allowUnboundedList: true
+
+  archive:
+    backend: local
+    name: kubling-archive
+    allowUnboundedList: false
