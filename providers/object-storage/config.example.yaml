@@ -1,0 +1,60 @@
+listen: 0.0.0.0:50051
+logLevel: info
+shutdownGracePeriod: 10s
+
+lobs:
+  maxBytes: 5368709120
+  maxChunkBytes: 262144
+  retention: 5m
+
+backends:
+  primary:
+    type: s3
+    region: eu-west-1
+    # endpoint: https://s3.example.com
+    # forcePathStyle: true
+    uploadPartSizeBytes: 8388608
+    multipartThresholdBytes: 16777216
+    transferConcurrency: 4
+
+  azure:
+    type: azure-blob
+    accountUrl: https://example.blob.core.windows.net
+    uploadBlockSizeBytes: 8388608
+    transferConcurrency: 4
+
+  google:
+    type: gcs
+    uploadChunkSizeBytes: 8388608
+
+  local:
+    type: filesystem
+    root: /var/lib/kubling/object-storage
+    createDirectories: true
+
+buckets:
+  media:
+    backend: primary
+    name: company-media
+    prefix: production
+    allowUnboundedList: false
+
+  archive:
+    backend: primary
+    name: company-archive
+    allowUnboundedList: true
+
+  documents:
+    backend: azure
+    name: company-documents
+    allowUnboundedList: false
+
+  evidence:
+    backend: google
+    name: company-evidence
+    allowUnboundedList: false
+
+  scratch:
+    backend: local
+    name: scratch
+    allowUnboundedList: false

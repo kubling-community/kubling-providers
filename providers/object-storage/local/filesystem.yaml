@@ -1,0 +1,25 @@
+listen: 0.0.0.0:50053
+logLevel: debug
+
+lobs:
+  maxBytes: 5368709120
+  maxChunkBytes: 65536
+  retention: 5m
+
+backends:
+  local:
+    type: filesystem
+    root: /tmp/kubling-object-storage-local
+    createDirectories: true
+
+buckets:
+  media:
+    backend: local
+    name: media
+    prefix: objects
+    allowUnboundedList: true
+
+  archive:
+    backend: local
+    name: archive
+    allowUnboundedList: false

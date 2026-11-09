@@ -1,0 +1,29 @@
+listen: 0.0.0.0:50053
+logLevel: debug
+
+lobs:
+  maxBytes: 5368709120
+  maxChunkBytes: 65536
+  retention: 5m
+
+backends:
+  local:
+    type: azure-blob
+    accountUrl: http://127.0.0.1:10000/kublinglocal
+    authentication: shared-key
+    accountName: kublinglocal
+    accountKeyEnvironment: AZURE_STORAGE_ACCOUNT_KEY
+    uploadBlockSizeBytes: 4194304
+    transferConcurrency: 2
+
+buckets:
+  media:
+    backend: local
+    name: kubling-media
+    prefix: objects
+    allowUnboundedList: true
+
+  archive:
+    backend: local
+    name: kubling-archive
+    allowUnboundedList: false

@@ -1,0 +1,8 @@
+**
+!sdk-go/
+!sdk-go/**
+!providers/
+!providers/object-storage/
+!providers/object-storage/**
+providers/object-storage/local/azure-fixture.env
+!LICENSE

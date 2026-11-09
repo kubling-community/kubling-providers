@@ -17,6 +17,7 @@ updates:
       - /providers/host
       - /providers/inmemory
       - /providers/kubernetes
+      - /providers/object-storage
       - /providers/openapi
       - /providers/redis
       - /testing
